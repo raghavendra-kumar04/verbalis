@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import { AppState, AppStateStatus, Platform } from 'react-native';
+import { AppStorage } from '../utils/storage';
 import { api } from '../services/api';
 
 interface AuthContextType {
@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check saved credentials and auto-logout on background/exit as requested by user
     const initAuth = async () => {
       try {
-        const savedEmail = await SecureStore.getItemAsync('verbalis_user_email');
+        const savedEmail = await AppStorage.getItem('verbalis_user_email');
         if (savedEmail) {
           setUserEmail(savedEmail);
         }
@@ -61,8 +61,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { token, user } = response.data;
 
       if (token) {
-        await SecureStore.setItemAsync('verbalis_jwt', token);
-        await SecureStore.setItemAsync('verbalis_user_email', email);
+        await AppStorage.setItem('verbalis_jwt', token);
+        await AppStorage.setItem('verbalis_user_email', email);
         setUserEmail(email);
         setIsAuthenticated(true);
         return { success: true };
@@ -72,8 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // In offline / local prototype mode before backend is active, allow developer sign-in
       if (!error.response && __DEV__) {
         console.log('Dev mode fallback: signing in locally without active backend');
-        await SecureStore.setItemAsync('verbalis_jwt', 'dev_mock_token_12345');
-        await SecureStore.setItemAsync('verbalis_user_email', email);
+        await AppStorage.setItem('verbalis_jwt', 'dev_mock_token_12345');
+        await AppStorage.setItem('verbalis_user_email', email);
         setUserEmail(email);
         setIsAuthenticated(true);
         return { success: true };
