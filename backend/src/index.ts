@@ -53,7 +53,7 @@ if (MONGODB_URI) {
 // Cleanup any expired session files from prior runs
 SessionContextService.cleanupExpiredSessions();
 
-app.listen(PORT, () => {
-  console.log(`Verbalis backend running on port ${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`Verbalis backend running on port ${PORT} (0.0.0.0)`);
   console.log(`Health check ready at http://localhost:${PORT}/health`);
 });

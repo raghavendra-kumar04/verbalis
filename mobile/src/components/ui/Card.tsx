@@ -29,6 +29,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: 'rgba(200, 196, 215, 0.4)',
+    overflow: 'hidden',
   },
   surface: {
     backgroundColor: Colors.light.surfaceContainerLowest,

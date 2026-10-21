@@ -6,9 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme';
@@ -64,12 +64,12 @@ export default function TopicSelectionScreen() {
     if (!matchesSearch) return false;
 
     if (selectedCategory === 'All') return true;
-    if (selectedCategory === 'Core CS' && (topic.id === 'dsa' || topic.id === 'databases')) return true;
-    if (selectedCategory === 'Systems' && (topic.id === 'os' || topic.id === 'networks' || topic.id === 'c')) return true;
-    if (selectedCategory === 'Languages' && (topic.id === 'java' || topic.id === 'c')) return true;
-    if (selectedCategory === 'Behavioral' && topic.id === 'hr') return true;
+    if (selectedCategory === 'Core CS') return topic.id === 'dsa' || topic.id === 'databases';
+    if (selectedCategory === 'Systems') return topic.id === 'os' || topic.id === 'networks' || topic.id === 'c';
+    if (selectedCategory === 'Languages') return topic.id === 'java' || topic.id === 'c';
+    if (selectedCategory === 'Behavioral') return topic.id === 'hr';
 
-    return true;
+    return false;
   };
 
   const handleSelectTopic = (topicId: string, customPrompt?: string) => {
@@ -82,8 +82,10 @@ export default function TopicSelectionScreen() {
     });
   };
 
+  const filteredList = INITIAL_TOPICS.filter((t) => !t.isCustom && filterTopic(t));
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -168,74 +170,92 @@ export default function TopicSelectionScreen() {
 
         {/* Predefined Topics List */}
         <View style={styles.topicsGrid}>
-          {INITIAL_TOPICS.filter((t) => !t.isCustom && filterTopic(t)).map((topic) => {
-            const isPracticed = completedTopicIds.includes(topic.id);
-            const revisionReason = revisionMap[topic.id];
+          {filteredList.length === 0 ? (
+            <Card style={styles.emptyFilterCard}>
+              <MaterialIcons name="filter-list-off" size={28} color={Colors.light.textTertiary} />
+              <Text style={styles.emptyFilterText}>No topics match "{selectedCategory}"</Text>
+              <Button
+                title="Show All Topics"
+                onPress={() => {
+                  setSelectedCategory('All');
+                  setSearchQuery('');
+                }}
+                size="sm"
+                variant="outline"
+              />
+            </Card>
+          ) : (
+            filteredList.map((topic) => {
+              const isPracticed = completedTopicIds.includes(topic.id);
+              const revisionReason = revisionMap[topic.id];
 
-            return (
-              <TouchableOpacity
-                key={topic.id}
-                activeOpacity={0.88}
-                onPress={() => handleSelectTopic(topic.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Select topic ${topic.name}`}>
-                <Card style={styles.topicCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.badgesGroup}>
-                      <Badge
-                        label={topic.difficulty}
-                        variant={
-                          topic.difficulty === 'Advanced'
-                            ? 'critical'
-                            : topic.difficulty === 'Intermediate'
-                            ? 'primary'
-                            : 'success'
-                        }
-                      />
-                      {/* Milestone 6 Topic highlight: "Not practiced yet" / "Practice again" */}
-                      <Badge
-                        label={isPracticed ? 'Practice again' : 'Not practiced yet'}
-                        variant={isPracticed ? 'caution' : 'neutral'}
-                      />
-                    </View>
-                    <Text style={styles.cardCategory}>{topic.category}</Text>
-                  </View>
-
-                  <Text style={styles.topicName}>{topic.name}</Text>
-
-                  <Text style={styles.sampleQuestion} numberOfLines={2}>
-                    "{topic.sampleQuestion}"
-                  </Text>
-
-                  {/* Revision notice if available */}
-                  {revisionReason && (
-                    <View style={styles.revisionRow}>
-                      <MaterialIcons name="history" size={14} color={Colors.light.primary} />
-                      <Text style={styles.revisionReasonText} numberOfLines={1}>
-                        {revisionReason}
+              return (
+                <TouchableOpacity
+                  key={topic.id}
+                  activeOpacity={0.88}
+                  onPress={() => handleSelectTopic(topic.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select topic ${topic.name}`}>
+                  <Card style={styles.topicCard}>
+                    {/* Badges Row - with wrap protection */}
+                    <View style={styles.badgesWrapper}>
+                      <View style={styles.badgesGroup}>
+                        <Badge
+                          label={topic.difficulty}
+                          variant={
+                            topic.difficulty === 'Advanced'
+                              ? 'critical'
+                              : topic.difficulty === 'Intermediate'
+                              ? 'primary'
+                              : 'success'
+                          }
+                        />
+                        <Badge
+                          label={isPracticed ? 'Practice again' : 'Not practiced yet'}
+                          variant={isPracticed ? 'caution' : 'neutral'}
+                        />
+                      </View>
+                      <Text style={styles.cardCategory} numberOfLines={1}>
+                        {topic.category}
                       </Text>
                     </View>
-                  )}
 
-                  <View style={styles.subtopicsRow}>
-                    {topic.subtopics.slice(0, 3).map((sub, idx) => (
-                      <View key={idx} style={styles.subtopicPill}>
-                        <Text style={styles.subtopicText}>{sub}</Text>
+                    <Text style={styles.topicName}>{topic.name}</Text>
+
+                    <Text style={styles.sampleQuestion} numberOfLines={3}>
+                      "{topic.sampleQuestion}"
+                    </Text>
+
+                    {/* Revision notice if available */}
+                    {revisionReason && (
+                      <View style={styles.revisionRow}>
+                        <MaterialIcons name="history" size={14} color={Colors.light.primary} />
+                        <Text style={styles.revisionReasonText} numberOfLines={2}>
+                          {revisionReason}
+                        </Text>
                       </View>
-                    ))}
-                    {topic.subtopics.length > 3 && (
-                      <Text style={styles.moreSubtopics}>+{topic.subtopics.length - 3}</Text>
                     )}
-                  </View>
 
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.startText}>Configure Session</Text>
-                    <MaterialIcons name="arrow-forward" size={16} color={Colors.light.primary} />
-                  </View>
-                </Card>
-              </TouchableOpacity>
-            );
-          })}
+                    <View style={styles.subtopicsRow}>
+                      {topic.subtopics.slice(0, 3).map((sub, idx) => (
+                        <View key={idx} style={styles.subtopicPill}>
+                          <Text style={styles.subtopicText} numberOfLines={1}>{sub}</Text>
+                        </View>
+                      ))}
+                      {topic.subtopics.length > 3 && (
+                        <Text style={styles.moreSubtopics}>+{topic.subtopics.length - 3}</Text>
+                      )}
+                    </View>
+
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.startText}>Configure Session</Text>
+                      <MaterialIcons name="arrow-forward" size={16} color={Colors.light.primary} />
+                    </View>
+                  </Card>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -361,16 +381,20 @@ const styles = StyleSheet.create({
   topicCard: {
     padding: 16,
     gap: 10,
+    overflow: 'hidden',
   },
-  cardHeader: {
+  badgesWrapper: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   badgesGroup: {
     flexDirection: 'row',
     gap: 6,
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   cardCategory: {
     ...Typography.sizes.labelSm,
@@ -385,7 +409,7 @@ const styles = StyleSheet.create({
     ...Typography.sizes.bodySm,
     color: Colors.light.textSecondary,
     fontStyle: 'italic',
-    lineHeight: 18,
+    lineHeight: 20,
   },
   revisionRow: {
     flexDirection: 'row',
@@ -393,13 +417,14 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: Colors.light.surfaceContainerLow,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: BorderRadius.xs + 2,
   },
   revisionReasonText: {
     ...Typography.sizes.labelSm,
     color: Colors.light.textSecondary,
     flex: 1,
+    lineHeight: 16,
   },
   subtopicsRow: {
     flexDirection: 'row',
@@ -410,10 +435,11 @@ const styles = StyleSheet.create({
   subtopicPill: {
     backgroundColor: Colors.light.surfaceContainerLow,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: BorderRadius.xs + 2,
     borderWidth: 1,
     borderColor: 'rgba(200, 196, 215, 0.3)',
+    maxWidth: '90%',
   },
   subtopicText: {
     ...Typography.sizes.labelSm,
@@ -438,5 +464,14 @@ const styles = StyleSheet.create({
     ...Typography.sizes.labelSm,
     color: Colors.light.primary,
     fontWeight: '600',
+  },
+  emptyFilterCard: {
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  emptyFilterText: {
+    ...Typography.sizes.bodyMd,
+    color: Colors.light.textSecondary,
   },
 });
