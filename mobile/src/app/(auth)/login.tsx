@@ -22,7 +22,7 @@ export default function LoginScreen() {
   const { login, isLoading } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [email, setEmail] = useState('alex.chen@university.edu');
+  const [email, setEmail] = useState('raghavendra@gmail.com');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

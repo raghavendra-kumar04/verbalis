@@ -12,7 +12,7 @@ router.post('/login', (req: Request, res: Response): void => {
   }
 
   // Personal use account authentication
-  const expectedEmail = process.env.ADMIN_EMAIL || 'alex.chen@university.edu';
+  const expectedEmail = process.env.ADMIN_EMAIL || 'raghavendra@gmail.com';
   const expectedPassword = process.env.ADMIN_PASSWORD || 'password123';
 
   // For developer ease in personal MVP mode, check password or match admin account

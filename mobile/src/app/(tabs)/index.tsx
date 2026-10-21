@@ -20,7 +20,7 @@ export default function HomeDashboardScreen() {
   const router = useRouter();
   const { userEmail } = useAuth();
 
-  const displayName = userEmail ? userEmail.split('@')[0] : 'Engineer';
+  const displayName = userEmail ? userEmail.split('@')[0] : 'Raghavendra';
 
   const handleStartPractice = (topicId = 'dsa') => {
     router.push({

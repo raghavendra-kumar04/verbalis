@@ -29,9 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initAuth = async () => {
       try {
         const savedEmail = await AppStorage.getItem('verbalis_user_email');
-        if (savedEmail) {
-          setUserEmail(savedEmail);
-        }
+        setUserEmail(savedEmail || 'raghavendra@gmail.com');
       } catch (err) {
         console.warn('Auth init error', err);
       } finally {
