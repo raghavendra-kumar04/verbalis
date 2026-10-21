@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verbalis - Home Dashboard</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with custom theme -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "background": "#faf9fb",
+            "primary-fixed": "#e3dfff",
+            "surface-container-low": "#f5f3f5",
+            "on-surface-variant": "#464555",
+            "surface-dim": "#dbd9dc",
+            "on-tertiary-container": "#e4e6f3",
+            "surface-tint": "#5246dc",
+            "inverse-on-surface": "#f2f0f3",
+            "surface-variant": "#e3e2e4",
+            "secondary-fixed-dim": "#c0c1ff",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "on-primary-fixed": "#120068",
+            "on-primary-fixed-variant": "#3926c4",
+            "on-tertiary-fixed": "#181b24",
+            "surface-container-high": "#e9e8ea",
+            "inverse-primary": "#c4c0ff",
+            "tertiary-fixed": "#e0e2ef",
+            "surface-container-highest": "#e3e2e4",
+            "on-secondary-fixed": "#07006c",
+            "primary": "#4233cc",
+            "on-secondary": "#ffffff",
+            "primary-container": "#5b50e5",
+            "on-primary": "#ffffff",
+            "tertiary-container": "#646772",
+            "surface": "#faf9fb",
+            "surface-container-lowest": "#ffffff",
+            "inverse-surface": "#2f3032",
+            "secondary": "#4648d4",
+            "tertiary-fixed-dim": "#c4c6d2",
+            "outline": "#777586",
+            "on-secondary-container": "#fffbff",
+            "error": "#ba1a1a",
+            "on-error": "#ffffff",
+            "surface-bright": "#faf9fb",
+            "secondary-fixed": "#e1e0ff",
+            "primary-fixed-dim": "#c4c0ff",
+            "on-tertiary-fixed-variant": "#434751",
+            "on-primary-container": "#e8e4ff",
+            "tertiary": "#4c4f59",
+            "surface-container": "#efedf0",
+            "on-surface": "#1b1c1e",
+            "on-tertiary": "#ffffff",
+            "outline-variant": "#c8c4d7",
+            "on-error-container": "#93000a",
+            "on-background": "#1b1c1e",
+            "secondary-container": "#6063ee",
+            "error-container": "#ffdad6"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2rem",
+            "space-md": "1rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1.5rem",
+            "gutter": "1rem",
+            "margin": "1.25rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "label-lg": ["Inter"],
+            "headline-sm": ["Inter"],
+            "metric-display": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-lg": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "body-sm": ["Inter"],
+            "headline-md": ["Inter"],
+            "label-sm": ["Inter"],
+            "label-md": ["Inter"],
+            "headline-lg-mobile": ["Inter"],
+            "headline-xl": ["Inter"],
+            "body-lg": ["Inter"]
+          },
+          "fontSize": {
+            "label-lg": ["14px", { "lineHeight": "18px", "fontWeight": "500" }],
+            "headline-sm": ["17px", { "lineHeight": "22px", "fontWeight": "600" }],
+            "metric-display": ["44px", { "lineHeight": "48px", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "21px", "fontWeight": "400" }],
+            "headline-lg": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "600" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "headline-md": ["20px", { "lineHeight": "26px", "fontWeight": "600" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+            "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+            "headline-lg-mobile": ["24px", { "lineHeight": "30px", "fontWeight": "600" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "fontWeight": "600" }],
+            "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    body {
+      background-color: #faf9fb;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface antialiased min-h-screen flex justify-center selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- Mobile Viewport Container -->
+<div class="w-full max-w-md min-h-screen bg-background flex flex-col relative pb-24 shadow-sm">
+<!-- Top System & Status Area (Safe Header) -->
+<header class="w-full pt-4 pb-3 px-5 flex items-center justify-between bg-surface">
+<div class="flex items-center space-x-3">
+<!-- Avatar with Online Status Dot -->
+<div class="relative w-10 h-10 rounded-full ring-1 ring-outline-variant/40 p-0.5 bg-surface-container-lowest">
+<img class="w-full h-full rounded-full object-cover" data-alt="A refined, modern professional portrait of an ambitious young engineer in a clean-lit modern studio setting. The lighting is soft and neutral, conveying focused composure and calm authority against an understated minimalist background in cool graphite and soft pearl tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2BLTjjX9a-ItpsMrygumgG6p04-FNC3BhehqFLO8Ijhq6KqHzh4gyw2o8j1Cnf1fn6UfHK5wEU7j1r95vbgZt7260aUNmrw9q9NlwAyUGsH-BooBeb00vcl72CqXX9UkhdwJ0JlvRj1AIasvlhYoNbv6TD0iC_TjjObwSmuNnMNLhuxq4WK92zkuuwolfvKd3cdPHaIj8UyXEc6seJWzN7CDvcdjAS0BR0SrIlseXnFFybXViGasQ4Q"/>
+<span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-surface"></span>
+</div>
+<div>
+<div class="flex items-center space-x-1.5">
+<h1 class="font-headline-sm text-headline-sm text-on-surface">Good morning, Alex</h1>
+</div>
+<!-- Date Pill -->
+<div class="inline-flex items-center mt-0.5">
+<span class="font-label-sm text-label-sm text-tertiary">Wednesday, Oct 24</span>
+</div>
+</div>
+</div>
+<!-- Audio Settings / Top Controls -->
+<div class="flex items-center space-x-2">
+<button aria-label="Audio Configuration" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors duration-150 active:scale-95" type="button">
+<span class="material-symbols-outlined text-[20px]">graphic_eq</span>
+</button>
+<button aria-label="Account Settings" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-colors duration-150 active:scale-95" type="button">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 px-5 pt-2 space-y-5">
+<!-- Prominent Hero Action Card ("Start Speaking Practice") -->
+<section class="relative rounded-xl p-[1px] bg-gradient-to-b from-primary-fixed to-outline-variant/30 shadow-[0_4px_24px_rgba(91,80,229,0.06)]">
+<div class="bg-surface-container-lowest rounded-[11px] p-5 relative overflow-hidden">
+<!-- Ambient Luminescence glow -->
+<div class="absolute -top-12 -right-12 w-36 h-36 bg-primary-fixed/30 rounded-full blur-2xl pointer-events-none"></div>
+<div class="flex items-start justify-between relative z-10 mb-3">
+<span class="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm border border-outline-variant/30">
+<span class="w-1.5 h-1.5 rounded-full bg-primary mr-1.5 animate-pulse"></span>
+              Daily Prompt
+            </span>
+<span class="font-label-sm text-label-sm text-tertiary">Est. 5-7 mins</span>
+</div>
+<div class="relative z-10 mb-4">
+<h2 class="font-headline-md text-headline-md text-on-surface tracking-tight mb-1.5">
+              Ready for your daily voice session?
+            </h2>
+<div class="flex items-center text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[15px] mr-1.5 text-primary">queue_music</span>
+<span>Topic queue: <strong class="font-medium text-on-surface">Explaining Hash Maps &amp; Collision Resolution</strong></span>
+</div>
+</div>
+<!-- Waveform Visualizer Preview (Quiet State) -->
+<div class="flex items-center justify-center space-x-1 py-2 mb-4 bg-surface-container-low/70 rounded-lg border border-outline-variant/20 px-4">
+<span class="w-1 h-2 rounded-full bg-outline-variant/60"></span>
+<span class="w-1 h-3 rounded-full bg-outline-variant/80"></span>
+<span class="w-1 h-4 rounded-full bg-primary-container"></span>
+<span class="w-1 h-7 rounded-full bg-primary"></span>
+<span class="w-1 h-9 rounded-full bg-primary"></span>
+<span class="w-1 h-5 rounded-full bg-primary-container"></span>
+<span class="w-1 h-8 rounded-full bg-primary"></span>
+<span class="w-1 h-3 rounded-full bg-outline-variant/80"></span>
+<span class="w-1 h-2 rounded-full bg-outline-variant/60"></span>
+<span class="w-1 h-4 rounded-full bg-primary-container"></span>
+<span class="w-1 h-6 rounded-full bg-primary"></span>
+<span class="w-1 h-2 rounded-full bg-outline-variant/70"></span>
+<span class="w-1 h-1.5 rounded-full bg-outline-variant/50"></span>
+</div>
+<!-- Master Action Button -->
+<button class="w-full h-[52px] bg-primary-container text-on-primary rounded-lg font-label-lg text-label-lg flex items-center justify-center space-x-2 shadow-sm hover:opacity-95 active:scale-[0.98] transition-all duration-150" type="button">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">mic</span>
+<span>Start Voice Practice</span>
+</button>
+</div>
+</section>
+<!-- Understated Progress Summary (Compact Strip) -->
+<section aria-label="Performance Summary" class="grid grid-cols-3 gap-2">
+<div class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg p-2.5 flex flex-col justify-between">
+<span class="font-label-sm text-label-sm text-tertiary">Clarity</span>
+<div class="mt-1 flex items-baseline justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">74%</span>
+<span class="font-label-sm text-label-sm text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-medium">+3%</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg p-2.5 flex flex-col justify-between">
+<span class="font-label-sm text-label-sm text-tertiary">Pace</span>
+<div class="mt-1 flex items-baseline justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">124</span>
+<span class="font-label-sm text-label-sm text-primary font-medium">Optimal</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg p-2.5 flex flex-col justify-between">
+<span class="font-label-sm text-label-sm text-tertiary">Completed</span>
+<div class="mt-1 flex items-baseline justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">14</span>
+<span class="font-label-sm text-label-sm text-tertiary font-medium">Sessions</span>
+</div>
+</div>
+</section>
+<!-- Recently Practised Section -->
+<section class="space-y-2.5">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Recently Practised</h3>
+<span class="font-label-sm text-label-sm text-tertiary">History</span>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-3.5 space-y-3">
+<div class="flex items-start justify-between">
+<div class="space-y-1">
+<h4 class="font-body-md text-body-md font-semibold text-on-surface leading-tight">
+                Database Indexing (B-Trees)
+              </h4>
+<p class="font-body-sm text-body-sm text-tertiary">
+                Completed yesterday • Technical Architecture
+              </p>
+</div>
+<!-- Score Pill -->
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-label-sm text-label-sm border border-emerald-200/50">
+              Clarity: 82%
+            </span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-outline-variant/20">
+<div class="flex items-center space-x-1.5 text-amber-800 bg-amber-50 px-2 py-1 rounded text-label-sm font-label-sm">
+<span class="material-symbols-outlined text-[14px]">info</span>
+<span>1 revision suggested: Filler words</span>
+</div>
+<button class="inline-flex items-center space-x-1 text-primary hover:text-primary-container font-label-sm text-label-sm font-semibold active:scale-95 transition-transform duration-150" type="button">
+<span>Revise Topic</span>
+<span class="material-symbols-outlined text-[14px]">refresh</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Suggested Topics for You -->
+<section class="space-y-2.5">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Suggested Topics for You</h3>
+<p class="font-label-sm text-label-sm text-tertiary">DSA &amp; System Design Focus</p>
+</div>
+<button class="font-label-sm text-label-sm text-primary font-semibold hover:underline" type="button">
+            View All
+          </button>
+</div>
+<div class="space-y-2.5">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-3.5 flex flex-col justify-between space-y-3 hover:border-outline-variant transition-colors">
+<div>
+<div class="flex items-center justify-between mb-1.5">
+<span class="px-2 py-0.5 bg-surface-container text-on-surface-variant rounded font-label-sm text-label-sm">Medium</span>
+<span class="font-label-sm text-label-sm text-tertiary">System Concepts</span>
+</div>
+<h4 class="font-body-md text-body-md font-semibold text-on-surface">
+                Explain REST vs GraphQL to a Junior Engineer
+              </h4>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-outline-variant/20 text-tertiary">
+<div class="flex items-center space-x-1 font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[15px] text-primary">target</span>
+<span>Focus: Technical Accuracy</span>
+</div>
+<button aria-label="Start REST vs GraphQL Topic" class="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-3.5 flex flex-col justify-between space-y-3 hover:border-outline-variant transition-colors">
+<div>
+<div class="flex items-center justify-between mb-1.5">
+<span class="px-2 py-0.5 bg-secondary-fixed/50 text-secondary rounded font-label-sm text-label-sm">Behavioral HR</span>
+<span class="font-label-sm text-label-sm text-tertiary">Leadership</span>
+</div>
+<h4 class="font-body-md text-body-md font-semibold text-on-surface">
+                Tell me about a time you resolved a merge conflict
+              </h4>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-outline-variant/20 text-tertiary">
+<div class="flex items-center space-x-1 font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[15px] text-primary">record_voice_over</span>
+<span>Focus: Fluency &amp; Cadence</span>
+</div>
+<button aria-label="Start Merge Conflict Topic" class="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Shortcut to Revise Previous Topics Banner -->
+<section>
+<div class="w-full bg-surface-container-low border border-outline-variant/40 rounded-xl p-3.5 flex items-center justify-between hover:bg-surface-container transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-lowest border border-outline-variant/30 flex items-center justify-center text-primary shadow-xs">
+<span class="material-symbols-outlined text-[20px]">history_edu</span>
+</div>
+<div>
+<h4 class="font-label-lg text-label-lg font-semibold text-on-surface">Revise Previous Topics</h4>
+<p class="font-body-sm text-body-sm text-tertiary">Review transcript excerpts and suggestions</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[20px]">chevron_right</span>
+</div>
+</section>
+</main>
+<!-- Shared Component: BottomNavBar -->
+<!-- Executing style_* from Shared Components JSON faithfully -->
+<nav aria-label="Bottom Navigation" class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-2 bg-surface/95 backdrop-blur-md h-16 shadow-[0_-4px_20px_rgba(28,29,31,0.03)]">
+<!-- Item 1: Practice (Mapped to Home Dashboard intent - Active State) -->
+<button class="flex flex-col items-center justify-center text-primary font-semibold active:scale-95 transition-transform duration-150" type="button">
+<span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;">mic</span>
+<span class="font-label-sm text-label-sm mt-0.5">Practice</span>
+</button>
+<!-- Item 2: Topics (Inactive) -->
+<button class="flex flex-col items-center justify-center text-tertiary font-normal hover:text-primary transition-colors duration-150 active:scale-95" type="button">
+<span class="material-symbols-outlined text-[22px]">category</span>
+<span class="font-label-sm text-label-sm mt-0.5">Topics</span>
+</button>
+<!-- Item 3: Progress (Inactive) -->
+<button class="flex flex-col items-center justify-center text-tertiary font-normal hover:text-primary transition-colors duration-150 active:scale-95" type="button">
+<span class="material-symbols-outlined text-[22px]">insights</span>
+<span class="font-label-sm text-label-sm mt-0.5">Progress</span>
+</button>
+<!-- Item 4: Profile (Inactive) -->
+<button class="flex flex-col items-center justify-center text-tertiary font-normal hover:text-primary transition-colors duration-150 active:scale-95" type="button">
+<span class="material-symbols-outlined text-[22px]">person</span>
+<span class="font-label-sm text-label-sm mt-0.5">Profile</span>
+</button>
+</nav>
+</div>
+</body></html>

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Verbalis - Final Session Report</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "background": "#faf9fb",
+            "primary-fixed": "#e3dfff",
+            "surface-container-low": "#f5f3f5",
+            "on-surface-variant": "#464555",
+            "surface-dim": "#dbd9dc",
+            "on-tertiary-container": "#e4e6f3",
+            "surface-tint": "#5246dc",
+            "inverse-on-surface": "#f2f0f3",
+            "surface-variant": "#e3e2e4",
+            "secondary-fixed-dim": "#c0c1ff",
+            "on-secondary-fixed-variant": "#2f2ebe",
+            "on-primary-fixed": "#120068",
+            "on-primary-fixed-variant": "#3926c4",
+            "on-tertiary-fixed": "#181b24",
+            "surface-container-high": "#e9e8ea",
+            "inverse-primary": "#c4c0ff",
+            "tertiary-fixed": "#e0e2ef",
+            "surface-container-highest": "#e3e2e4",
+            "on-secondary-fixed": "#07006c",
+            "primary": "#4233cc",
+            "on-secondary": "#ffffff",
+            "primary-container": "#5b50e5",
+            "on-primary": "#ffffff",
+            "tertiary-container": "#646772",
+            "surface": "#faf9fb",
+            "surface-container-lowest": "#ffffff",
+            "inverse-surface": "#2f3032",
+            "secondary": "#4648d4",
+            "tertiary-fixed-dim": "#c4c6d2",
+            "outline": "#777586",
+            "on-secondary-container": "#fffbff",
+            "error": "#ba1a1a",
+            "on-error": "#ffffff",
+            "surface-bright": "#faf9fb",
+            "secondary-fixed": "#e1e0ff",
+            "primary-fixed-dim": "#c4c0ff",
+            "on-tertiary-fixed-variant": "#434751",
+            "on-primary-container": "#e8e4ff",
+            "tertiary": "#4c4f59",
+            "surface-container": "#efedf0",
+            "on-surface": "#1b1c1e",
+            "on-tertiary": "#ffffff",
+            "outline-variant": "#c8c4d7",
+            "on-error-container": "#93000a",
+            "on-background": "#1b1c1e",
+            "secondary-container": "#6063ee",
+            "error-container": "#ffdad6"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2rem",
+            "space-md": "1rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1.5rem",
+            "gutter": "1rem",
+            "margin": "1.25rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "label-lg": ["Inter"],
+            "headline-sm": ["Inter"],
+            "metric-display": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-lg": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "body-sm": ["Inter"],
+            "headline-md": ["Inter"],
+            "label-sm": ["Inter"],
+            "label-md": ["Inter"],
+            "headline-lg-mobile": ["Inter"],
+            "headline-xl": ["Inter"],
+            "body-lg": ["Inter"]
+          },
+          "fontSize": {
+            "label-lg": ["14px", { "lineHeight": "18px", "fontWeight": "500" }],
+            "headline-sm": ["17px", { "lineHeight": "22px", "fontWeight": "600" }],
+            "metric-display": ["44px", { "lineHeight": "48px", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "21px", "fontWeight": "400" }],
+            "headline-lg": ["30px", { "lineHeight": "38px", "fontWeight": "600" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "600" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "headline-md": ["20px", { "lineHeight": "26px", "fontWeight": "600" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+            "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+            "headline-lg-mobile": ["24px", { "lineHeight": "30px", "fontWeight": "600" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "fontWeight": "600" }],
+            "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: 'liga';
+      -webkit-font-smoothing: antialiased;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .custom-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen antialiased flex flex-col justify-between selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- Mobile/Tablet Application Canvas Container -->
+<div class="w-full max-w-xl mx-auto flex flex-col min-h-screen bg-background relative pb-8">
+<!-- Top Navigation Bar: Focused Task State (BottomNavBar intentionally suppressed) -->
+<header class="sticky top-0 z-40 bg-surface/90 backdrop-blur-md px-5 h-14 flex items-center justify-between border-b border-outline-variant/30">
+<div class="flex items-center space-x-2">
+<button aria-label="Close" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight">Session Summary</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-normal">Oct 24</span>
+</div>
+</div>
+<div class="flex items-center space-x-1">
+<button aria-label="Share or Export" class="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container active:scale-95 transition-all" type="button">
+<span class="material-symbols-outlined" data-icon="ios_share">ios_share</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 px-5 pt-4 space-y-4">
+<!-- Header Card: Topic & AI Synthesis -->
+<section class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-5 relative overflow-hidden shadow-[0_1px_3px_rgba(28,29,31,0.02)]">
+<div class="flex flex-col space-y-3">
+<div class="flex items-start justify-between gap-2">
+<span class="font-label-md text-label-md text-primary font-semibold tracking-wide uppercase">Technical Evaluation</span>
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-800">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+<span class="font-label-sm text-label-sm font-medium">Strong Foundation • Ready for Revision</span>
+</div>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-on-surface tracking-tight">
+              Hash Tables: Separate Chaining vs Open Addressing
+            </h1>
+</div>
+<!-- Audio Summary Player Pill -->
+<div class="pt-1">
+<button class="w-full flex items-center justify-between px-3.5 py-2.5 bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 rounded-xl transition-all active:scale-[0.99] group" type="button">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined" data-icon="volume_up">volume_up</span>
+</div>
+<div class="flex flex-col text-left">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold group-hover:text-primary transition-colors">Hear AI Summary</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">1:12 mins • Synthesis of clarity &amp; depth</span>
+</div>
+</div>
+<div class="flex items-center space-x-1">
+<span class="w-1 h-3.5 bg-primary/40 rounded-full animate-pulse"></span>
+<span class="w-1 h-5 bg-primary rounded-full animate-pulse delay-75"></span>
+<span class="w-1 h-2.5 bg-primary/60 rounded-full animate-pulse delay-150"></span>
+<span class="w-1 h-4 bg-primary rounded-full animate-pulse"></span>
+</div>
+</button>
+</div>
+</div>
+</section>
+<!-- Dual Core Dimension Cards (Bento Style Layout) -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+<!-- Dimension 1: Spoken Communication -->
+<article class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-4 flex flex-col justify-between space-y-4">
+<div class="flex items-center justify-between border-b border-outline-variant/20 pb-3">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary" data-icon="record_voice_over">record_voice_over</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Spoken Communication</h2>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">Primary</span>
+</div>
+<div class="space-y-3">
+<!-- Metric item 1 -->
+<div class="flex items-start justify-between">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant">Fluency &amp; Cadence</div>
+<div class="font-headline-sm text-headline-sm text-on-surface pt-0.5">128 WPM</div>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/50 mt-1">
+                Optimal speed
+              </span>
+</div>
+<!-- Metric item 2 -->
+<div class="border-t border-outline-variant/20 pt-2.5 flex items-start justify-between">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant">Filler Words</div>
+<div class="font-headline-sm text-headline-sm text-on-surface pt-0.5">6 occurrences</div>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-1 rounded bg-amber-50 text-amber-800 border border-amber-200/50 mt-1">
+                'um' &amp; 'basically'
+              </span>
+</div>
+<!-- Metric item 3 -->
+<div class="border-t border-outline-variant/20 pt-2.5">
+<div class="font-label-md text-label-md text-on-surface-variant">Pausing &amp; Structure</div>
+<p class="font-body-sm text-body-sm text-on-surface pt-1">
+                Good sentence boundary pauses with minimal mid-phrase hesitation.
+              </p>
+</div>
+</div>
+</article>
+<!-- Dimension 2: Technical Accuracy -->
+<article class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-4 flex flex-col justify-between space-y-4">
+<div class="flex items-center justify-between border-b border-outline-variant/20 pb-3">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-secondary" data-icon="psychology">psychology</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Technical Accuracy</h2>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">Domain</span>
+</div>
+<div class="space-y-3">
+<!-- Metric item 1 -->
+<div class="flex items-start justify-between">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant">Concept Mastery</div>
+<div class="font-headline-sm text-headline-sm text-on-surface pt-0.5">85% coverage</div>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/50 mt-1">
+                Key concepts met
+              </span>
+</div>
+<!-- Metric item 2 -->
+<div class="border-t border-outline-variant/20 pt-2.5">
+<div class="font-label-md text-label-md text-on-surface-variant">Collision Trade-offs</div>
+<p class="font-body-sm text-body-sm text-on-surface pt-1">
+                Explored linear probing thoroughly; missed quadratic probing and double hashing details.
+              </p>
+</div>
+<!-- Micro progress indication -->
+<div class="border-t border-outline-variant/20 pt-2.5">
+<div class="w-full bg-surface-container rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary-container h-1.5 rounded-full" style="width: 85%;"></div>
+</div>
+<div class="flex justify-between font-label-sm text-label-sm text-on-surface-variant pt-1.5">
+<span>Core Data Structures</span>
+<span>Tier 1 Interview Read</span>
+</div>
+</div>
+</div>
+</article>
+</section>
+<!-- Deep Dive 1: Grammar & Sentence Formation -->
+<section class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-4 space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary" data-icon="spellcheck">spellcheck</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Grammar &amp; Sentence Formation</h2>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">Linguistic Polish</span>
+</div>
+<div class="space-y-2.5">
+<!-- Highlighted Achievement -->
+<div class="p-3 bg-surface-container-low rounded-lg border-l-2 border-emerald-600">
+<div class="flex items-center gap-1.5 text-emerald-800 font-label-md text-label-md pb-0.5">
+<span class="material-symbols-outlined text-sm" data-icon="check_circle">check_circle</span>
+<span>Observed Strength</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface">
+              Concise, unencumbered definition of hash collisions without trailing run-on sentences.
+            </p>
+</div>
+<!-- AI Upgrade Example -->
+<div class="p-3 bg-surface-container-low rounded-lg border-l-2 border-primary-container">
+<div class="flex items-center gap-1.5 text-primary font-label-md text-label-md pb-0.5">
+<span class="material-symbols-outlined text-sm" data-icon="auto_fix_high">auto_fix_high</span>
+<span>AI Upgrade Example</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface">
+              Provided more precise technical vocabulary for load factor thresholding (e.g., using "amortized rehash cost" instead of "it makes it slow when it resizes").
+            </p>
+</div>
+</div>
+</section>
+<!-- Deep Dive 2: Top Recurring Weakness -->
+<section class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-4 space-y-2">
+<div class="flex items-center space-x-2 text-on-surface">
+<span class="material-symbols-outlined text-amber-700" data-icon="warning">warning</span>
+<h2 class="font-headline-sm text-headline-sm">Top Recurring Weakness</h2>
+</div>
+<div class="p-3 bg-amber-50/60 border border-amber-200/50 rounded-lg">
+<p class="font-body-sm text-body-sm text-amber-950 font-medium">
+            "Rushing explanations when explaining time complexity edge cases."
+          </p>
+<p class="font-body-sm text-body-sm text-amber-900/80 pt-1">
+            Cadence spiked to 164 WPM during the O(n) degenerate linked list degradation question.
+          </p>
+</div>
+</section>
+<!-- Deep Dive 3: Action Plan for Next Session -->
+<section class="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-4 space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary" data-icon="task_alt">task_alt</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Action Plan for Next Session</h2>
+</div>
+<span class="font-label-sm text-label-sm px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed">2 Rehearsals</span>
+</div>
+<ol class="space-y-2">
+<li class="flex items-start space-x-3 p-2.5 rounded-lg bg-surface-container-low/70">
+<span class="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-sm text-label-sm">1</span>
+<div class="flex-1">
+<span class="font-body-sm text-body-sm font-semibold text-on-surface">Structured Composure:</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Practice a deliberate 3-second structured pause before answering system trade-offs.</p>
+</div>
+</li>
+<li class="flex items-start space-x-3 p-2.5 rounded-lg bg-surface-container-low/70">
+<span class="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-sm text-label-sm">2</span>
+<div class="flex-1">
+<span class="font-body-sm text-body-sm font-semibold text-on-surface">Articulate Clustering:</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Re-explain Open Addressing clustering types (primary vs secondary) out loud.</p>
+</div>
+</li>
+</ol>
+</section>
+</main>
+<!-- Bottom Actions / Next Step Decisions -->
+<footer class="mt-6 px-5 space-y-2.5">
+<!-- Primary Action: Drill Weak Areas -->
+<button class="w-full h-[52px] bg-primary-container text-on-primary rounded-xl font-label-lg text-label-lg flex items-center justify-center space-x-2 shadow-sm hover:opacity-95 active:scale-[0.98] transition-all" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="bolt">bolt</span>
+<span>Practise Weak Areas (Quick Drill)</span>
+</button>
+<!-- Secondary Action: Revise Later -->
+<button class="w-full h-[52px] bg-surface-container-lowest border border-outline-variant/60 text-on-surface rounded-xl font-label-lg text-label-lg flex items-center justify-center space-x-2 hover:bg-surface-container-low active:scale-[0.98] transition-all" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="bookmark_add">bookmark_add</span>
+<span>Revise This Topic Later</span>
+</button>
+<!-- Tertiary Clean Text Action -->
+<button class="w-full py-2.5 text-center font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface active:scale-95 transition-all" type="button">
+        Return to Dashboard
+      </button>
+</footer>
+</div>
+</body></html>
