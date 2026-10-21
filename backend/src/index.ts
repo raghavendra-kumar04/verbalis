@@ -6,7 +6,9 @@ import mongoose from 'mongoose';
 import { authRoutes } from './routes/auth.js';
 import { topicRoutes, seedTopicsIfEmpty } from './routes/topics.js';
 import { sessionRoutes } from './routes/sessions.js';
-import { historyRoutes } from './routes/history.js';
+import { historyRoutes, getProgressHandler } from './routes/history.js';
+import { profileRoutes } from './routes/profile.js';
+import { authenticateJwt } from './middleware/auth.js';
 import { SessionContextService } from './services/sessionContext.js';
 
 dotenv.config();
@@ -29,6 +31,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/topics', topicRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/history', historyRoutes);
+app.get('/api/progress', authenticateJwt, getProgressHandler);
+app.use('/api/profile', profileRoutes);
 
 // Connect to MongoDB Atlas (or graceful local fallback)
 const MONGODB_URI = process.env.MONGODB_URI;

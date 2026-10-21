@@ -1,71 +1,103 @@
 import { Router, Response } from 'express';
 import { AuthenticatedRequest, authenticateJwt } from '../middleware/auth.js';
 import { SessionSummary } from '../models/SessionSummary.js';
+import { Topic } from '../models/Topic.js';
 
 const router = Router();
-
 router.use(authenticateJwt);
 
+/**
+ * GET /api/history
+ * Retrieves real past session summaries from MongoDB (never hallucinated)
+ */
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId || 'personal_user_1';
 
   try {
     const summaries = await SessionSummary.find({ userId })
       .sort({ createdAt: -1 })
-      .limit(20)
+      .limit(50)
       .lean();
 
-    if (summaries && summaries.length > 0) {
-      res.json(summaries);
+    res.json(summaries || []);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to retrieve session history' });
+  }
+});
+
+/**
+ * Handler for progress metrics and recurring weaknesses
+ */
+export const getProgressHandler = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.userId || 'personal_user_1';
+
+  try {
+    const summaries = await SessionSummary.find({ userId }).lean();
+
+    if (!summaries || summaries.length === 0) {
+      res.json({
+        totalSessions: 0,
+        averageClarity: 0,
+        averageTechnical: 0,
+        averageGrammar: 0,
+        averageReadiness: 0,
+        totalSpokenSeconds: 0,
+        topRecurringWeaknesses: [],
+        completedTopicIds: [],
+      });
       return;
     }
-  } catch {}
 
-  // Mock initial history for developer preview
-  res.json([
-    {
-      _id: 'mock_1',
-      topicId: 'dsa',
-      topicName: 'Hash Tables Collision Resolution',
-      overallScore: {
-        grammar: 4.0,
-        clarity: 4.2,
-        technicalAccuracy: 4.5,
-        interviewReadiness: 4.3,
-      },
-      strengths: ['Clear explanation of chaining', 'Confident pacing'],
-      recurringWeaknesses: ['Hesitation on quadratic probing'],
-      turnCount: 3,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      _id: 'mock_2',
-      topicId: 'databases',
-      topicName: 'Database Indexing (B-Trees)',
-      overallScore: {
-        grammar: 3.9,
-        clarity: 3.8,
-        technicalAccuracy: 4.6,
-        interviewReadiness: 4.0,
-      },
-      strengths: ['Accurate logarithmic tree complexity'],
-      recurringWeaknesses: ['Filler words (um, basically)'],
-      turnCount: 4,
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ]);
-});
+    const totalSessions = summaries.length;
+    let sumClarity = 0;
+    let sumTech = 0;
+    let sumGrammar = 0;
+    let sumReadiness = 0;
+    let totalSeconds = 0;
+    const weaknessCounts: Record<string, number> = {};
+    const topicSet = new Set<string>();
 
-router.get('/progress', async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
-  res.json({
-    averageClarity: 4.2,
-    totalSessions: 14,
-    totalAudioSeconds: 2280,
-    topRecurringWeaknesses: [
-      { weakness: 'Filler words during transitions (basically, like)', frequency: 3 },
-      { weakness: 'Fast opening rate (> 150 wpm)', frequency: 2 },
-    ],
-  });
-});
+    for (const s of summaries) {
+      if (s.overallScore) {
+        sumClarity += s.overallScore.clarity || 0;
+        sumTech += s.overallScore.technicalAccuracy || 0;
+        sumGrammar += s.overallScore.grammar || 0;
+        sumReadiness += s.overallScore.interviewReadiness || 0;
+      }
+      totalSeconds += s.durationSeconds || 0;
+      if (s.topicId) {
+        topicSet.add(s.topicId);
+      }
+      if (s.recurringWeaknesses && Array.isArray(s.recurringWeaknesses)) {
+        for (const w of s.recurringWeaknesses) {
+          const trimmed = w.trim();
+          if (trimmed) {
+            weaknessCounts[trimmed] = (weaknessCounts[trimmed] || 0) + 1;
+          }
+        }
+      }
+    }
+
+    const topRecurringWeaknesses = Object.entries(weaknessCounts)
+      .map(([weakness, frequency]) => ({ weakness, frequency }))
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 5);
+
+    res.json({
+      totalSessions,
+      averageClarity: Number((sumClarity / totalSessions).toFixed(1)),
+      averageTechnical: Number((sumTech / totalSessions).toFixed(1)),
+      averageGrammar: Number((sumGrammar / totalSessions).toFixed(1)),
+      averageReadiness: Number((sumReadiness / totalSessions).toFixed(1)),
+      totalSpokenSeconds: totalSeconds,
+      topRecurringWeaknesses,
+      completedTopicIds: Array.from(topicSet),
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to aggregate progress' });
+  }
+};
+
+router.get('/progress', getProgressHandler);
 
 export const historyRoutes = router;

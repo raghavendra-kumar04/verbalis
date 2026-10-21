@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -15,12 +17,89 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { WaveformVisualizer } from '../../components/ui/WaveformVisualizer';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
+
+interface ProgressData {
+  totalSessions: number;
+  averageClarity: number;
+  averageTechnical: number;
+  averageGrammar: number;
+  averageReadiness: number;
+  totalSpokenSeconds: number;
+  topRecurringWeaknesses: Array<{ weakness: string; frequency: number }>;
+  completedTopicIds: string[];
+}
+
+interface HistoryItem {
+  sessionId: string;
+  topicId: string;
+  topicName?: string;
+  durationSeconds: number;
+  overallScore: {
+    clarity: number;
+    technicalAccuracy: number;
+    grammar: number;
+    interviewReadiness: number;
+  };
+  recurringWeaknesses: string[];
+  createdAt: string;
+}
+
+interface RevisionTopic {
+  topicId: string;
+  name: string;
+  reason: string;
+}
 
 export default function HomeDashboardScreen() {
   const router = useRouter();
-  const { userEmail } = useAuth();
+  const { firstName, userEmail } = useAuth();
 
-  const displayName = userEmail ? userEmail.split('@')[0] : 'Raghavendra';
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [progress, setProgress] = useState<ProgressData | null>(null);
+  const [recentSession, setRecentSession] = useState<HistoryItem | null>(null);
+  const [revisionSuggestions, setRevisionSuggestions] = useState<RevisionTopic[]>([]);
+
+  const displayName = firstName || (userEmail ? userEmail.split('@')[0] : 'Raghavendra');
+
+  const fetchData = async () => {
+    try {
+      // 1. Fetch real aggregated progress from MongoDB
+      const progressRes = await api.get('/progress');
+      if (progressRes.data) {
+        setProgress(progressRes.data);
+      }
+
+      // 2. Fetch real session history (latest session)
+      const historyRes = await api.get('/history');
+      if (Array.isArray(historyRes.data) && historyRes.data.length > 0) {
+        setRecentSession(historyRes.data[0]);
+      } else {
+        setRecentSession(null);
+      }
+
+      // 3. Fetch real revision suggestions
+      const revRes = await api.get('/topics/revision');
+      if (Array.isArray(revRes.data)) {
+        setRevisionSuggestions(revRes.data);
+      }
+    } catch (err) {
+      console.warn('Error loading real dashboard data from database:', err);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
   const handleStartPractice = (topicId = 'dsa') => {
     router.push({
@@ -31,8 +110,11 @@ export default function HomeDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Top Header */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        {/* Top Header with dynamically loaded firstName */}
         <View style={styles.header}>
           <View style={styles.userSection}>
             <View style={styles.avatarContainer}>
@@ -43,44 +125,56 @@ export default function HomeDashboardScreen() {
             </View>
             <View>
               <Text style={styles.greetingText}>Good morning, {displayName}</Text>
-              <Text style={styles.dateText}>Ready for speech practice</Text>
+              <Text style={styles.dateText}>Ready for voice rehearsal</Text>
             </View>
           </View>
           <View style={styles.headerControls}>
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/topics')}
-              style={styles.iconCircleBtn}>
+              style={styles.iconCircleBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Explore Topics">
               <MaterialIcons name="tune" size={18} color={Colors.light.onSurfaceVariant} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/profile')}
-              style={styles.iconCircleBtn}>
+              style={styles.iconCircleBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Settings">
               <MaterialIcons name="settings" size={18} color={Colors.light.onSurfaceVariant} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Prominent Hero Action Card */}
+        {/* Hero Voice Practice Card */}
         <View style={styles.heroWrapper}>
           <Card style={styles.heroCard}>
             <View style={styles.heroHeader}>
               <Badge
-                label="Daily Prompt"
+                label="Daily Interview Prompt"
                 variant="primary"
                 icon={<View style={styles.pulseDot} />}
               />
-              <Text style={styles.heroDuration}>Est. 3-5 mins</Text>
+              <Text style={styles.heroDuration}>2-minute turns</Text>
             </View>
 
-            <Text style={styles.heroTitle}>Ready for your daily voice session?</Text>
+            <Text style={styles.heroTitle}>Practice technical explanation with AI</Text>
             <View style={styles.topicQueueRow}>
-              <MaterialIcons name="queue-music" size={16} color={Colors.light.primary} />
+              <MaterialIcons name="record-voice-over" size={16} color={Colors.light.primary} />
               <Text style={styles.topicQueueText} numberOfLines={1}>
-                Topic: <Text style={styles.boldTopic}>Hash Tables & Collision Resolution</Text>
+                {revisionSuggestions.length > 0 ? (
+                  <>
+                    Recommended: <Text style={styles.boldTopic}>{revisionSuggestions[0].name}</Text>
+                  </>
+                ) : (
+                  <>
+                    Topic: <Text style={styles.boldTopic}>Data Structures & Algorithms</Text>
+                  </>
+                )}
               </Text>
             </View>
 
-            {/* Waveform preview */}
+            {/* Static waveform preview */}
             <View style={styles.waveformContainer}>
               <WaveformVisualizer isActive={false} barCount={20} />
             </View>
@@ -88,133 +182,158 @@ export default function HomeDashboardScreen() {
             {/* Master Action CTA */}
             <Button
               title="Start Voice Practice"
-              onPress={() => handleStartPractice('dsa')}
+              onPress={() =>
+                handleStartPractice(
+                  revisionSuggestions.length > 0 ? revisionSuggestions[0].topicId : 'dsa'
+                )
+              }
               size="lg"
               icon={<MaterialIcons name="mic" size={22} color="#fff" />}
             />
           </Card>
         </View>
 
-        {/* Performance Metric Strip */}
+        {/* Real Performance Metrics (Retrieved only from MongoDB) */}
         <View style={styles.metricsGrid}>
           <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Clarity</Text>
+            <Text style={styles.metricLabel}>Avg Clarity</Text>
             <View style={styles.metricValRow}>
-              <Text style={styles.metricNumber}>78%</Text>
-              <Badge label="+4%" variant="success" style={styles.trendBadge} />
+              <Text style={styles.metricNumber}>
+                {progress && progress.totalSessions > 0 ? `${progress.averageClarity}%` : '—'}
+              </Text>
+              {progress && progress.totalSessions > 0 && (
+                <Badge label="Real DB" variant="neutral" style={styles.trendBadge} />
+              )}
             </View>
           </View>
           <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Pace</Text>
+            <Text style={styles.metricLabel}>Spoken Time</Text>
             <View style={styles.metricValRow}>
-              <Text style={styles.metricNumber}>128</Text>
-              <Text style={styles.metricSub}>wpm</Text>
+              <Text style={styles.metricNumber}>
+                {progress && progress.totalSpokenSeconds > 0
+                  ? `${Math.round(progress.totalSpokenSeconds / 60)}m`
+                  : '0m'}
+              </Text>
+              <Text style={styles.metricSub}>total</Text>
             </View>
           </View>
           <View style={styles.metricItem}>
             <Text style={styles.metricLabel}>Sessions</Text>
             <View style={styles.metricValRow}>
-              <Text style={styles.metricNumber}>16</Text>
+              <Text style={styles.metricNumber}>{progress ? progress.totalSessions : 0}</Text>
               <Text style={styles.metricSub}>done</Text>
             </View>
           </View>
         </View>
 
-        {/* Recently Practised Section */}
+        {/* Real Recently Practised Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recently Practised</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/history')}>
-              <Text style={styles.sectionLink}>History</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/history')}
+              accessibilityRole="button">
+              <Text style={styles.sectionLink}>View All History</Text>
             </TouchableOpacity>
           </View>
 
-          <Card style={styles.recentCard}>
-            <View style={styles.recentTopRow}>
-              <View style={styles.recentTextGroup}>
-                <Text style={styles.recentTitle}>Database Indexing (B-Trees)</Text>
-                <Text style={styles.recentMeta}>Completed yesterday • Systems & Data</Text>
+          {recentSession ? (
+            <Card style={styles.recentCard}>
+              <View style={styles.recentTopRow}>
+                <View style={styles.recentTextGroup}>
+                  <Text style={styles.recentTitle}>
+                    {recentSession.topicName || recentSession.topicId.toUpperCase()}
+                  </Text>
+                  <Text style={styles.recentMeta}>
+                    {new Date(recentSession.createdAt).toLocaleDateString()} • {recentSession.durationSeconds}s duration
+                  </Text>
+                </View>
+                <Badge
+                  label={`Clarity: ${recentSession.overallScore?.clarity || 0}%`}
+                  variant={
+                    (recentSession.overallScore?.clarity || 0) >= 70 ? 'success' : 'caution'
+                  }
+                />
               </View>
-              <Badge label="Clarity: 82%" variant="success" />
-            </View>
 
-            <View style={styles.recentBottomRow}>
-              <View style={styles.revisionNotice}>
-                <MaterialIcons name="info-outline" size={14} color={Colors.light.cautionText} />
-                <Text style={styles.revisionText}>1 revision focus: Filler words</Text>
+              <View style={styles.recentBottomRow}>
+                <View style={styles.revisionNotice}>
+                  <MaterialIcons name="info-outline" size={14} color={Colors.light.cautionText} />
+                  <Text style={styles.revisionText} numberOfLines={1}>
+                    {recentSession.recurringWeaknesses && recentSession.recurringWeaknesses.length > 0
+                      ? `Focus: ${recentSession.recurringWeaknesses[0]}`
+                      : 'Good overall delivery'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleStartPractice(recentSession.topicId)}
+                  style={styles.reviseBtn}
+                  accessibilityRole="button">
+                  <Text style={styles.reviseBtnText}>Practice Again</Text>
+                  <MaterialIcons name="refresh" size={14} color={Colors.light.primary} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => handleStartPractice('databases')}
-                style={styles.reviseBtn}>
-                <Text style={styles.reviseBtnText}>Revise Topic</Text>
-                <MaterialIcons name="refresh" size={14} color={Colors.light.primary} />
-              </TouchableOpacity>
-            </View>
-          </Card>
+            </Card>
+          ) : (
+            <Card style={styles.emptyRecentCard}>
+              <MaterialIcons name="history" size={28} color={Colors.light.textTertiary} />
+              <View style={styles.emptyRecentTextGroup}>
+                <Text style={styles.emptyRecentTitle}>No sessions completed yet</Text>
+                <Text style={styles.emptyRecentSub}>
+                  Record your first technical interview answer to view real metrics and weaknesses.
+                </Text>
+              </View>
+            </Card>
+          )}
         </View>
 
-        {/* Suggested Topics for You */}
+        {/* Suggested Topics for You (Real Revision DB Data) */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View>
-              <Text style={styles.sectionTitle}>Suggested Topics for You</Text>
-              <Text style={styles.sectionSubtitle}>DSA & System Interview Focus</Text>
+              <Text style={styles.sectionTitle}>Topics for Practice</Text>
+              <Text style={styles.sectionSubtitle}>Targeted interview questions</Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/(tabs)/topics')}>
-              <Text style={styles.sectionLink}>View All</Text>
+              <Text style={styles.sectionLink}>View All Topics</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Suggested Topic 1 */}
-          <Card style={styles.suggestedCard}>
-            <View style={styles.suggestedTop}>
-              <Badge label="Intermediate" variant="neutral" />
-              <Text style={styles.categoryTag}>Protocols & Systems</Text>
-            </View>
-            <Text style={styles.suggestedTitle}>
-              Explain TCP 3-Way Handshake vs UDP to a Junior Engineer
-            </Text>
-            <View style={styles.suggestedBottom}>
-              <View style={styles.focusRow}>
-                <MaterialIcons name="track-changes" size={14} color={Colors.light.primary} />
-                <Text style={styles.focusText}>Focus: Technical Accuracy</Text>
+          {revisionSuggestions.slice(0, 2).map((item) => (
+            <Card key={item.topicId} style={styles.suggestedCard}>
+              <View style={styles.suggestedTop}>
+                <Badge
+                  label={item.reason.includes('Not practiced') ? 'Not practiced yet' : 'Practice again'}
+                  variant={item.reason.includes('Not practiced') ? 'primary' : 'caution'}
+                />
+                <Text style={styles.categoryTag}>{item.topicId.toUpperCase()}</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => handleStartPractice('networks')}
-                style={styles.circleArrowBtn}>
-                <MaterialIcons name="arrow-forward" size={16} color={Colors.light.onSurface} />
-              </TouchableOpacity>
-            </View>
-          </Card>
-
-          {/* Suggested Topic 2 */}
-          <Card style={styles.suggestedCard}>
-            <View style={styles.suggestedTop}>
-              <Badge label="Behavioral HR" variant="caution" />
-              <Text style={styles.categoryTag}>Leadership</Text>
-            </View>
-            <Text style={styles.suggestedTitle}>
-              Tell me about a challenging technical conflict you resolved
-            </Text>
-            <View style={styles.suggestedBottom}>
-              <View style={styles.focusRow}>
-                <MaterialIcons name="record-voice-over" size={14} color={Colors.light.primary} />
-                <Text style={styles.focusText}>Focus: Structure & Delivery</Text>
+              <Text style={styles.suggestedTitle}>{item.name}</Text>
+              <View style={styles.suggestedBottom}>
+                <View style={styles.focusRow}>
+                  <MaterialIcons name="track-changes" size={14} color={Colors.light.primary} />
+                  <Text style={styles.focusText} numberOfLines={1}>
+                    {item.reason}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleStartPractice(item.topicId)}
+                  style={styles.circleArrowBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Start ${item.name}`}>
+                  <MaterialIcons name="arrow-forward" size={16} color={Colors.light.onSurface} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => handleStartPractice('hr')}
-                style={styles.circleArrowBtn}>
-                <MaterialIcons name="arrow-forward" size={16} color={Colors.light.onSurface} />
-              </TouchableOpacity>
-            </View>
-          </Card>
+            </Card>
+          ))}
         </View>
 
         {/* Shortcut Banner to Topics */}
         <TouchableOpacity
           onPress={() => router.push('/(tabs)/topics')}
           activeOpacity={0.88}
-          style={styles.bannerContainer}>
+          style={styles.bannerContainer}
+          accessibilityRole="button">
           <View style={styles.bannerIconBox}>
             <MaterialIcons name="history-edu" size={20} color={Colors.light.primary} />
           </View>
@@ -255,9 +374,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatarPlaceholder: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.light.surfaceContainerHigh,
     alignItems: 'center',
     justifyContent: 'center',
@@ -292,9 +411,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.light.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
@@ -375,7 +494,7 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
   },
   trendBadge: {
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 1,
   },
   metricSub: {
@@ -407,6 +526,27 @@ const styles = StyleSheet.create({
   recentCard: {
     padding: 14,
     gap: 12,
+  },
+  emptyRecentCard: {
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: Colors.light.surfaceContainerLow,
+  },
+  emptyRecentTextGroup: {
+    flex: 1,
+  },
+  emptyRecentTitle: {
+    ...Typography.sizes.labelLg,
+    color: Colors.light.onSurface,
+    fontWeight: '600',
+  },
+  emptyRecentSub: {
+    ...Typography.sizes.bodySm,
+    color: Colors.light.textTertiary,
+    marginTop: 2,
+    lineHeight: 18,
   },
   recentTopRow: {
     flexDirection: 'row',
@@ -443,6 +583,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: BorderRadius.xs + 2,
     gap: 4,
+    flex: 1,
+    marginRight: 8,
   },
   revisionText: {
     ...Typography.sizes.labelSm,
@@ -452,6 +594,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    minHeight: 44,
+    paddingHorizontal: 8,
   },
   reviseBtnText: {
     ...Typography.sizes.labelSm,
@@ -490,15 +634,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
   },
   focusText: {
     ...Typography.sizes.labelSm,
     color: Colors.light.textSecondary,
   },
   circleArrowBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.light.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
@@ -514,9 +659,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bannerIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: Colors.light.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',

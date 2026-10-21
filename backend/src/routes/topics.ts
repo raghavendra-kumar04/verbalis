@@ -113,20 +113,53 @@ router.get('/', async (_req: AuthenticatedRequest, res: Response) => {
   res.json(DEFAULT_TOPICS);
 });
 
-router.get('/revision', authenticateJwt, async (_req: AuthenticatedRequest, res: Response) => {
-  // Suggest topics not recently practiced
-  res.json([
-    {
-      topicId: 'databases',
-      name: 'Databases & Indexing',
-      reason: 'Last practiced 3 days ago • Revision focus: Filler words',
-    },
-    {
-      topicId: 'networks',
-      name: 'Computer Networks & Protocols',
-      reason: 'Not practiced this week • High interview weight',
-    },
-  ]);
+router.get('/revision', authenticateJwt, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.userId || 'personal_user_1';
+
+  try {
+    const { SessionSummary } = await import('../models/SessionSummary.js');
+    const summaries = await SessionSummary.find({ userId }).sort({ createdAt: -1 }).lean();
+
+    const topicLastPracticed: Record<string, { lastDate: Date; weaknesses: string[] }> = {};
+    for (const s of summaries) {
+      if (s.topicId && !topicLastPracticed[s.topicId]) {
+        topicLastPracticed[s.topicId] = {
+          lastDate: s.createdAt,
+          weaknesses: s.recurringWeaknesses || [],
+        };
+      }
+    }
+
+    const allTopics = await Topic.find().lean();
+    const topicsList = allTopics.length > 0 ? allTopics : DEFAULT_TOPICS;
+
+    const revisionSuggestions: any[] = [];
+    const now = Date.now();
+
+    for (const t of topicsList) {
+      const history = topicLastPracticed[t.topicId];
+      if (history) {
+        const daysAgo = Math.floor((now - new Date(history.lastDate).getTime()) / (1000 * 60 * 60 * 24));
+        if (daysAgo >= 3) {
+          revisionSuggestions.push({
+            topicId: t.topicId,
+            name: t.name,
+            reason: `Practiced ${daysAgo} day${daysAgo === 1 ? '' : 's'} ago • Focus: ${history.weaknesses[0] || 'Technical accuracy'}`,
+          });
+        }
+      } else {
+        revisionSuggestions.push({
+          topicId: t.topicId,
+          name: t.name,
+          reason: 'Not practiced yet • Core interview area',
+        });
+      }
+    }
+
+    res.json(revisionSuggestions.slice(0, 4));
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch revision topics' });
+  }
 });
 
 export const topicRoutes = router;

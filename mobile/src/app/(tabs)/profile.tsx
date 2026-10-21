@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,10 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
+  TextInput,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,11 +21,58 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
-  const { userEmail, logout } = useAuth();
+  const { userEmail, firstName, preferences, updateProfile, logout } = useAuth();
 
-  const [feedbackMode, setFeedbackMode] = useState<'per_answer' | 'end_of_session'>('per_answer');
-  const [speechSpeed, setSpeechSpeed] = useState<'0.9x' | '1.0x' | '1.1x'>('1.0x');
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [nameInput, setNameInput] = useState(firstName || 'Raghavendra');
+  const [feedbackMode, setFeedbackMode] = useState<'per_answer' | 'end_of_session'>(
+    preferences.preferredFeedbackMode || 'per_answer'
+  );
+  const [speechSpeed, setSpeechSpeed] = useState<'0.9x' | '1.0x' | '1.1x'>(
+    preferences.speechSpeed || '1.0x'
+  );
+  const [reducedMotion, setReducedMotion] = useState(preferences.reducedMotion || false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (firstName) {
+      setNameInput(firstName);
+    }
+    if (preferences) {
+      setFeedbackMode(preferences.preferredFeedbackMode || 'per_answer');
+      setSpeechSpeed(preferences.speechSpeed || '1.0x');
+      setReducedMotion(Boolean(preferences.reducedMotion));
+    }
+  }, [firstName, preferences]);
+
+  const handleSaveProfile = async () => {
+    if (!nameInput.trim()) {
+      Alert.alert('Validation Error', 'First name cannot be empty.');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveSuccessMsg(null);
+      const res = await updateProfile({
+        firstName: nameInput.trim(),
+        preferredFeedbackMode: feedbackMode,
+        speechSpeed,
+        reducedMotion,
+      });
+
+      if (res.success) {
+        setSaveSuccessMsg('Profile changes saved successfully to database!');
+        setTimeout(() => setSaveSuccessMsg(null), 4000);
+      } else {
+        Alert.alert('Update Failed', res.message || 'Could not save profile changes.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Network error while saving profile');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out of Verbalis?', [
@@ -48,17 +97,44 @@ export default function ProfileSettingsScreen() {
           <Text style={styles.subtitle}>Manage your coaching parameters and preferences</Text>
         </View>
 
-        {/* User Profile Card */}
+        {/* Success Banner */}
+        {saveSuccessMsg && (
+          <View style={styles.successBanner}>
+            <MaterialIcons name="check-circle" size={18} color={Colors.light.success} />
+            <Text style={styles.successText}>{saveSuccessMsg}</Text>
+          </View>
+        )}
+
+        {/* Editable User Profile Card */}
         <Card style={styles.profileCard}>
           <View style={styles.avatarRow}>
             <View style={styles.avatarCircle}>
               <MaterialIcons name="person" size={28} color={Colors.light.primary} />
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{userEmail || 'Engineer'}</Text>
-              <Text style={styles.userRole}>Technical Interview Rehearsal</Text>
+              <Text style={styles.userName}>{firstName || 'Raghavendra'}</Text>
+              <Text style={styles.userRole}>{userEmail || 'raghavendra@gmail.com'}</Text>
             </View>
             <Badge label="Personal" variant="primary" />
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Editable First Name */}
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>Display First Name</Text>
+            <Text style={styles.inputHelp}>
+              Displayed on your top navbar and used by the AI coach.
+            </Text>
+            <TextInput
+              style={styles.textInput}
+              value={nameInput}
+              onChangeText={setNameInput}
+              placeholder="Enter first name"
+              placeholderTextColor={Colors.light.textTertiary}
+              autoCapitalize="words"
+              accessibilityLabel="First Name"
+            />
           </View>
         </Card>
 
@@ -83,7 +159,9 @@ export default function ProfileSettingsScreen() {
                   style={[
                     styles.toggleBtn,
                     feedbackMode === 'per_answer' && styles.toggleBtnActive,
-                  ]}>
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Per-Answer Feedback">
                   <Text
                     style={[
                       styles.toggleText,
@@ -97,7 +175,9 @@ export default function ProfileSettingsScreen() {
                   style={[
                     styles.toggleBtn,
                     feedbackMode === 'end_of_session' && styles.toggleBtnActive,
-                  ]}>
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="End-of-Session Feedback">
                   <Text
                     style={[
                       styles.toggleText,
@@ -115,14 +195,16 @@ export default function ProfileSettingsScreen() {
             <View style={styles.settingRow}>
               <View style={styles.settingTextGroup}>
                 <Text style={styles.settingLabel}>AI Question Speech Speed</Text>
-                <Text style={styles.settingDesc}>Text-to-speech cadence rate</Text>
+                <Text style={styles.settingDesc}>Cadence rate for Expo Speech TTS</Text>
               </View>
               <View style={styles.toggleRow}>
                 {(['0.9x', '1.0x', '1.1x'] as const).map((spd) => (
                   <TouchableOpacity
                     key={spd}
                     onPress={() => setSpeechSpeed(spd)}
-                    style={[styles.speedBtn, speechSpeed === spd && styles.speedBtnActive]}>
+                    style={[styles.speedBtn, speechSpeed === spd && styles.speedBtnActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Speech speed ${spd}`}>
                     <Text style={[styles.speedText, speechSpeed === spd && styles.speedTextActive]}>
                       {spd}
                     </Text>
@@ -137,17 +219,33 @@ export default function ProfileSettingsScreen() {
             <View style={styles.settingRow}>
               <View style={styles.settingTextGroup}>
                 <Text style={styles.settingLabel}>Reduced Motion</Text>
-                <Text style={styles.settingDesc}>Simplify animated waveforms and halos</Text>
+                <Text style={styles.settingDesc}>Disable pulsing waveforms and animations</Text>
               </View>
               <Switch
                 value={reducedMotion}
                 onValueChange={setReducedMotion}
                 trackColor={{ false: Colors.light.surfaceContainerHigh, true: Colors.light.primaryContainer }}
                 thumbColor="#ffffff"
+                accessibilityLabel="Toggle reduced motion"
               />
             </View>
           </Card>
         </View>
+
+        {/* Save Settings Button */}
+        <Button
+          title={isSaving ? 'Saving Changes...' : 'Save Profile Changes'}
+          onPress={handleSaveProfile}
+          disabled={isSaving}
+          size="lg"
+          icon={
+            isSaving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <MaterialIcons name="save" size={20} color="#fff" />
+            )
+          }
+        />
 
         {/* Privacy & Transient Architecture Policy */}
         <View style={styles.section}>
@@ -202,8 +300,25 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     lineHeight: 18,
   },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.successTint,
+    padding: 12,
+    borderRadius: BorderRadius.md,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.25)',
+  },
+  successText: {
+    ...Typography.sizes.bodySm,
+    color: Colors.light.success,
+    fontWeight: '600',
+    flex: 1,
+  },
   profileCard: {
     padding: 16,
+    gap: 16,
   },
   avatarRow: {
     flexDirection: 'row',
@@ -229,6 +344,29 @@ const styles = StyleSheet.create({
     ...Typography.sizes.bodySm,
     color: Colors.light.textTertiary,
     marginTop: 2,
+  },
+  inputSection: {
+    gap: 6,
+  },
+  inputLabel: {
+    ...Typography.sizes.labelLg,
+    color: Colors.light.onSurface,
+    fontWeight: '600',
+  },
+  inputHelp: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
+  },
+  textInput: {
+    height: 46,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 196, 215, 0.5)',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 14,
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    color: Colors.light.onSurface,
+    ...Typography.sizes.bodyMd,
+    marginTop: 4,
   },
   section: {
     gap: 10,
@@ -268,8 +406,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   toggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: BorderRadius.sm,
   },
   toggleBtnActive: {
@@ -289,8 +430,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   speedBtn: {
+    minHeight: 44,
+    minWidth: 44,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: BorderRadius.sm,
   },
   speedBtnActive: {

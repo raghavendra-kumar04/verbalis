@@ -15,6 +15,7 @@ interface MicOrbProps {
   onPress: () => void;
   disabled?: boolean;
   label?: string;
+  reducedMotion?: boolean;
 }
 
 export const MicOrb: React.FC<MicOrbProps> = ({
@@ -22,11 +23,18 @@ export const MicOrb: React.FC<MicOrbProps> = ({
   onPress,
   disabled = false,
   label = isRecording ? 'Tap to Finish Speaking' : 'Tap to Start Speaking',
+  reducedMotion = false,
 }) => {
   const pulseScale = useSharedValue(1);
   const pulseOpacity = useSharedValue(0.4);
 
   useEffect(() => {
+    if (reducedMotion) {
+      pulseScale.value = 1;
+      pulseOpacity.value = 0;
+      return;
+    }
+
     if (isRecording) {
       pulseScale.value = withRepeat(
         withTiming(1.22, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
@@ -42,7 +50,7 @@ export const MicOrb: React.FC<MicOrbProps> = ({
       pulseScale.value = withTiming(1, { duration: 300 });
       pulseOpacity.value = withTiming(0, { duration: 300 });
     }
-  }, [isRecording]);
+  }, [isRecording, reducedMotion]);
 
   const animatedHaloStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],

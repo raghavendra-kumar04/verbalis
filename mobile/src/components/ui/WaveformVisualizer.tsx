@@ -15,12 +15,18 @@ interface WaveformBarProps {
   isActive: boolean;
   baseHeight: number;
   maxHeight: number;
+  reducedMotion?: boolean;
 }
 
-const WaveformBar: React.FC<WaveformBarProps> = ({ index, isActive, baseHeight, maxHeight }) => {
+const WaveformBar: React.FC<WaveformBarProps> = ({ index, isActive, baseHeight, maxHeight, reducedMotion }) => {
   const heightAnim = useSharedValue(baseHeight);
 
   useEffect(() => {
+    if (reducedMotion) {
+      heightAnim.value = isActive ? Math.min(maxHeight, baseHeight * 1.8) : baseHeight;
+      return;
+    }
+
     if (isActive) {
       // Staggered oscillation for realistic acoustic voice energy
       const delay = (index % 6) * 120;
@@ -39,7 +45,7 @@ const WaveformBar: React.FC<WaveformBarProps> = ({ index, isActive, baseHeight, 
     } else {
       heightAnim.value = withTiming(baseHeight, { duration: 300 });
     }
-  }, [isActive]);
+  }, [isActive, reducedMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     height: heightAnim.value,
@@ -67,11 +73,13 @@ const WaveformBar: React.FC<WaveformBarProps> = ({ index, isActive, baseHeight, 
 interface WaveformVisualizerProps {
   isActive?: boolean;
   barCount?: number;
+  reducedMotion?: boolean;
 }
 
 export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
   isActive = false,
   barCount = 24,
+  reducedMotion = false,
 }) => {
   const bars = Array.from({ length: barCount }, (_, i) => i);
 
@@ -84,6 +92,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
           isActive={isActive}
           baseHeight={6 + (i % 3) * 3}
           maxHeight={36}
+          reducedMotion={reducedMotion}
         />
       ))}
     </View>

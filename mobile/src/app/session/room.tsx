@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  AppState,
+  AppStateStatus,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,14 +23,19 @@ import {
 import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme';
 import { INITIAL_TOPICS } from '../../constants/topics';
 import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 import { WaveformVisualizer } from '../../components/ui/WaveformVisualizer';
 import { MicOrb } from '../../components/ui/MicOrb';
+import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 
 type RoomState = 'QUESTION_PLAYING' | 'LISTENING' | 'PROCESSING' | 'CLARIFY' | 'ERROR';
 
 export default function VoicePracticeRoomScreen() {
   const router = useRouter();
+  const { preferences } = useAuth();
+  const isReducedMotion = preferences?.reducedMotion || false;
+
   const params = useLocalSearchParams<{
     topicId?: string;
     customPrompt?: string;
@@ -39,7 +46,7 @@ export default function VoicePracticeRoomScreen() {
 
   const selectedTopic =
     INITIAL_TOPICS.find((t) => t.id === params.topicId) || INITIAL_TOPICS[0];
-  const feedbackMode = params.feedbackMode || 'per_answer';
+  const feedbackMode = params.feedbackMode || preferences?.preferredFeedbackMode || 'per_answer';
 
   // Session state
   const [sessionId, setSessionId] = useState<string>('');
@@ -53,6 +60,8 @@ export default function VoicePracticeRoomScreen() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
   const [clarifyMessage, setClarifyMessage] = useState<string | null>(null);
+  const [ttsFailedNotice, setTtsFailedNotice] = useState<string | null>(null);
+  const [isInterrupted, setIsInterrupted] = useState(false);
 
   // Native expo-audio recorder hook
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -72,7 +81,7 @@ export default function VoicePracticeRoomScreen() {
           topicId: selectedTopic.id,
           customTopicText: params.customPrompt || undefined,
           feedbackMode,
-          coachingFocus: params.coachingFocus || 'all_round',
+          coachingFocus: params.coachingFocus || preferences?.coachingFocus || 'all_round',
         });
         if (isMounted && response.data.sessionId) {
           setSessionId(response.data.sessionId);
@@ -104,9 +113,28 @@ export default function VoicePracticeRoomScreen() {
     }
   }, [currentQuestion]);
 
-  // 3. Duration counter during LISTENING (2 minutes max)
+  // 3. Interruption Handling: phone calls, screen lock, or background transitions (Milestone 5)
   useEffect(() => {
-    if (roomState === 'LISTENING') {
+    const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      if (nextState.match(/inactive|background/)) {
+        Speech.stop();
+        if (roomState === 'LISTENING') {
+          await stopAudioRecording();
+          setIsInterrupted(true);
+        } else if (roomState === 'QUESTION_PLAYING') {
+          setIsInterrupted(true);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [roomState]);
+
+  // 4. Duration counter during LISTENING (2 minutes max)
+  useEffect(() => {
+    if (roomState === 'LISTENING' && !isInterrupted) {
       timerRef.current = setInterval(() => {
         setRecordingDuration((prev) => {
           if (prev >= 120) {
@@ -122,24 +150,31 @@ export default function VoicePracticeRoomScreen() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [roomState]);
+  }, [roomState, isInterrupted]);
 
   const speakQuestion = async (text: string) => {
     try {
       setRoomState('QUESTION_PLAYING');
       setClarifyMessage(null);
+      setTtsFailedNotice(null);
       Speech.stop();
+
       if (isSpeakerEnabled) {
-        const rate = params.speechSpeed === '1.1x' ? 1.1 : params.speechSpeed === '0.9x' ? 0.9 : 1.0;
+        const speedPreference = params.speechSpeed || preferences?.speechSpeed || '1.0x';
+        const rate = speedPreference === '1.1x' ? 1.1 : speedPreference === '0.9x' ? 0.9 : 1.0;
+
         Speech.speak(text, {
           rate,
           pitch: 1.0,
           language: 'en-US',
           onDone: () => {
+            // State machine transition: TTS finished -> enable mic & start recording
             setRoomState('LISTENING');
             startAudioRecording();
           },
-          onError: () => {
+          onError: (e) => {
+            console.warn('TTS playback error (edge case):', e);
+            setTtsFailedNotice('Question speech unavailable on device. Please read the prompt above.');
             setRoomState('LISTENING');
             startAudioRecording();
           },
@@ -149,17 +184,26 @@ export default function VoicePracticeRoomScreen() {
         startAudioRecording();
       }
     } catch {
+      setTtsFailedNotice('Question speech unavailable on device. Please read the prompt above.');
       setRoomState('LISTENING');
       startAudioRecording();
     }
+  };
+
+  const skipTtsAndRecord = () => {
+    Speech.stop();
+    setRoomState('LISTENING');
+    startAudioRecording();
   };
 
   const startAudioRecording = async () => {
     setClarifyMessage(null);
     setRecordingDuration(0);
 
+    // Ensure audio routing hygiene: stop any speech output to prevent echo/feedback loop
+    Speech.stop();
+
     if (Platform.OS === 'web') {
-      // Real Web browser microphone recording via MediaRecorder API
       try {
         if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -181,7 +225,6 @@ export default function VoicePracticeRoomScreen() {
         Alert.alert('Microphone Access', 'Please allow microphone access in your browser to speak.');
       }
     } else {
-      // Real Native audio recording via expo-audio
       try {
         const { granted } = await requestRecordingPermissionsAsync();
         if (!granted) {
@@ -209,7 +252,6 @@ export default function VoicePracticeRoomScreen() {
           if (webMediaRecorderRef.current && webMediaRecorderRef.current.state !== 'inactive') {
             webMediaRecorderRef.current.onstop = () => {
               const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
-              // Stop all audio tracks
               if (webStreamRef.current) {
                 webStreamRef.current.getTracks().forEach((track: any) => track.stop());
               }
@@ -243,7 +285,7 @@ export default function VoicePracticeRoomScreen() {
 
     const recordingResult = await stopAudioRecording();
 
-    // Check if recording was virtually empty (less than 1.5 seconds)
+    // Check if recording was virtually empty (< 2 seconds)
     if (recordingDuration < 2) {
       setRoomState('CLARIFY');
       setClarifyMessage("I didn't hear an answer. Please tap the microphone and speak your explanation.");
@@ -276,21 +318,18 @@ export default function VoicePracticeRoomScreen() {
 
       const data = response.data;
 
-      // If backend reports no speech or ambiguous audio
       if (data.type === 'clarify') {
         setRoomState('CLARIFY');
         setClarifyMessage(data.message || "I couldn't hear any speech clearly. Could you please repeat your answer?");
         return;
       }
 
-      // If backend reports missing Groq key
       if (data.type === 'config_error') {
         setRoomState('ERROR');
         Alert.alert('Configuration Required', data.message);
         return;
       }
 
-      // Real evaluated feedback from Groq LLaMA
       if (feedbackMode === 'per_answer' && data.feedback) {
         router.push({
           pathname: '/session/feedback',
@@ -305,7 +344,6 @@ export default function VoicePracticeRoomScreen() {
           },
         });
       } else {
-        // End-of-session mode: advance directly to next question without mid-session evaluation
         setQuestionNumber((n) => n + 1);
         setCurrentQuestion(data.nextQuestion || 'Could you elaborate on the practical trade-offs?');
       }
@@ -361,7 +399,11 @@ export default function VoicePracticeRoomScreen() {
       <View style={styles.container}>
         {/* Top Action Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleEndSession} style={styles.endSessionBtn}>
+          <TouchableOpacity
+            onPress={handleEndSession}
+            style={styles.endSessionBtn}
+            accessibilityRole="button"
+            accessibilityLabel="End session">
             <MaterialIcons name="close" size={16} color={Colors.light.textSecondary} />
             <Text style={styles.endSessionText}>End Session</Text>
           </TouchableOpacity>
@@ -372,14 +414,16 @@ export default function VoicePracticeRoomScreen() {
 
           <View style={styles.headerControls}>
             <View style={styles.speedPill}>
-              <Text style={styles.speedText}>{params.speechSpeed || '1.0x'}</Text>
+              <Text style={styles.speedText}>{params.speechSpeed || preferences?.speechSpeed || '1.0x'}</Text>
             </View>
             <TouchableOpacity
               onPress={() => {
                 setIsSpeakerEnabled(!isSpeakerEnabled);
                 if (isSpeakerEnabled) Speech.stop();
               }}
-              style={styles.speakerBtn}>
+              style={styles.speakerBtn}
+              accessibilityRole="button"
+              accessibilityLabel={isSpeakerEnabled ? 'Mute speaker' : 'Enable speaker'}>
               <MaterialIcons
                 name={isSpeakerEnabled ? 'volume-up' : 'volume-off'}
                 size={18}
@@ -408,14 +452,39 @@ export default function VoicePracticeRoomScreen() {
 
             <Text style={styles.promptText}>{currentQuestion}</Text>
 
+            {/* TTS Failure fallback text banner (Milestone 5) */}
+            {ttsFailedNotice && (
+              <View style={styles.ttsNoticeBox}>
+                <MaterialIcons name="volume-mute" size={14} color={Colors.light.textTertiary} />
+                <Text style={styles.ttsNoticeText}>{ttsFailedNotice}</Text>
+              </View>
+            )}
+
             <View style={styles.promptFooter}>
-              <TouchableOpacity onPress={() => speakQuestion(currentQuestion)} style={styles.repeatBtn}>
+              <TouchableOpacity
+                onPress={() => speakQuestion(currentQuestion)}
+                style={styles.repeatBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Repeat question audio">
                 <MaterialIcons name="replay" size={16} color={Colors.light.primary} />
-                <Text style={styles.repeatText}>Repeat Question (AI Audio)</Text>
+                <Text style={styles.repeatText}>Repeat Audio</Text>
               </TouchableOpacity>
-              <Text style={styles.durationNote}>
-                {roomState === 'QUESTION_PLAYING' ? 'Speaking...' : 'Ready'}
-              </Text>
+
+              {/* Milestone 5: Skip TTS button when TTS is playing */}
+              {roomState === 'QUESTION_PLAYING' ? (
+                <TouchableOpacity
+                  onPress={skipTtsAndRecord}
+                  style={styles.skipTtsBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Skip audio and answer now">
+                  <MaterialIcons name="fast-forward" size={16} color={Colors.light.primary} />
+                  <Text style={styles.skipTtsText}>Skip TTS & Answer</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.durationNote}>
+                  {roomState === 'LISTENING' ? 'Recording answer...' : 'Ready'}
+                </Text>
+              )}
             </View>
           </Card>
 
@@ -442,7 +511,9 @@ export default function VoicePracticeRoomScreen() {
                 ]}
               />
               <Text style={styles.stateIndicatorText}>
-                {roomState === 'LISTENING'
+                {roomState === 'QUESTION_PLAYING'
+                  ? 'AI reading question aloud...'
+                  : roomState === 'LISTENING'
                   ? 'Listening to your spoken answer...'
                   : roomState === 'PROCESSING'
                   ? 'Transcribing & evaluating speech...'
@@ -452,9 +523,13 @@ export default function VoicePracticeRoomScreen() {
               </Text>
             </View>
 
-            {/* Dynamic Waveform Visualizer */}
+            {/* Dynamic Waveform Visualizer (Reduced Motion respected) */}
             <View style={styles.waveformBox}>
-              <WaveformVisualizer isActive={roomState === 'LISTENING'} barCount={26} />
+              <WaveformVisualizer
+                isActive={roomState === 'LISTENING'}
+                barCount={26}
+                reducedMotion={isReducedMotion}
+              />
             </View>
 
             {/* Duration Counter & Limit Warning (2 Minutes Max) */}
@@ -472,28 +547,36 @@ export default function VoicePracticeRoomScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     Speech.stop();
-                    Alert.alert('Paused', 'Take a breath. When ready, tap Continue.');
+                    setIsInterrupted(true);
                   }}
-                  style={styles.flankBtn}>
+                  style={styles.flankBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Pause rehearsal">
                   <MaterialIcons name="pause" size={20} color={Colors.light.onSurface} />
                 </TouchableOpacity>
                 <Text style={styles.flankLabel}>Pause</Text>
               </View>
 
-              {/* Master Microphone Target: 84px elevated with radiant atmosphere */}
+              {/* Master Microphone Target: 84px elevated */}
               <MicOrb
                 isRecording={roomState === 'LISTENING'}
-                onPress={
-                  roomState === 'LISTENING'
-                    ? handleFinishSpeaking
-                    : () => {
-                        Speech.stop();
-                        setRoomState('LISTENING');
-                        startAudioRecording();
-                      }
-                }
+                reducedMotion={isReducedMotion}
+                onPress={() => {
+                  if (roomState === 'QUESTION_PLAYING') {
+                    // Milestone 5: Tapping mic during TTS cancels TTS and starts recording
+                    skipTtsAndRecord();
+                  } else if (roomState === 'LISTENING') {
+                    handleFinishSpeaking();
+                  } else {
+                    Speech.stop();
+                    setRoomState('LISTENING');
+                    startAudioRecording();
+                  }
+                }}
                 label={
-                  roomState === 'LISTENING'
+                  roomState === 'QUESTION_PLAYING'
+                    ? 'Tap Mic to Skip & Speak'
+                    : roomState === 'LISTENING'
                     ? 'Tap to Finish Speaking'
                     : roomState === 'PROCESSING'
                     ? 'Evaluating...'
@@ -503,7 +586,11 @@ export default function VoicePracticeRoomScreen() {
 
               {/* Right Flank: Re-record */}
               <View style={styles.flankCol}>
-                <TouchableOpacity onPress={handleRestartTurn} style={styles.flankBtn}>
+                <TouchableOpacity
+                  onPress={handleRestartTurn}
+                  style={styles.flankBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Restart this answer">
                   <MaterialIcons name="restart-alt" size={20} color={Colors.light.onSurface} />
                 </TouchableOpacity>
                 <Text style={styles.flankLabel}>Restart</Text>
@@ -516,6 +603,44 @@ export default function VoicePracticeRoomScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Milestone 5: Interruption Resume Overlay */}
+        {isInterrupted && (
+          <View style={styles.interruptionOverlay}>
+            <Card style={styles.interruptionCard}>
+              <View style={styles.interruptionIconBox}>
+                <MaterialIcons name="phone-paused" size={32} color={Colors.light.cautionText} />
+              </View>
+              <Text style={styles.interruptionTitle}>Session Paused</Text>
+              <Text style={styles.interruptionDesc}>
+                An interruption occurred (such as an incoming call or app backgrounding). Your
+                rehearsal session is safe.
+              </Text>
+              <View style={styles.interruptionBtnRow}>
+                <Button
+                  title="Repeat Question"
+                  onPress={() => {
+                    setIsInterrupted(false);
+                    speakQuestion(currentQuestion);
+                  }}
+                  variant="outline"
+                  size="md"
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Resume Recording"
+                  onPress={() => {
+                    setIsInterrupted(false);
+                    setRoomState('LISTENING');
+                    startAudioRecording();
+                  }}
+                  size="md"
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </Card>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -544,11 +669,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.light.surfaceContainerLow,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: BorderRadius.pill,
     gap: 4,
     borderWidth: 1,
     borderColor: 'rgba(200, 196, 215, 0.4)',
+    minHeight: 44,
   },
   endSessionText: {
     ...Typography.sizes.labelSm,
@@ -557,7 +683,7 @@ const styles = StyleSheet.create({
   counterPill: {
     backgroundColor: Colors.light.surfaceContainer,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: BorderRadius.pill,
     borderWidth: 1,
     borderColor: 'rgba(200, 196, 215, 0.5)',
@@ -573,9 +699,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   speedPill: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: Colors.light.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
@@ -588,9 +714,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   speakerBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.light.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
@@ -645,6 +771,18 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
     lineHeight: 28,
   },
+  ttsNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.light.surfaceContainerLow,
+    padding: 8,
+    borderRadius: BorderRadius.xs + 2,
+  },
+  ttsNoticeText: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
+  },
   promptFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -658,14 +796,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.light.surfaceContainerLow,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: BorderRadius.sm,
     gap: 6,
+    minHeight: 44,
   },
   repeatText: {
     ...Typography.sizes.labelSm,
     color: Colors.light.primary,
     fontWeight: '500',
+  },
+  skipTtsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF0FD',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.sm,
+    gap: 6,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(91, 80, 229, 0.3)',
+  },
+  skipTtsText: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
   durationNote: {
     ...Typography.sizes.labelSm,
@@ -772,5 +928,45 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
     lineHeight: 18,
+  },
+  interruptionOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.margin,
+    zIndex: 100,
+  },
+  interruptionCard: {
+    width: '100%',
+    maxWidth: 360,
+    padding: 24,
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: 12,
+  },
+  interruptionIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.light.cautionTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  interruptionTitle: {
+    ...Typography.sizes.headlineSm,
+    color: Colors.light.onSurface,
+  },
+  interruptionDesc: {
+    ...Typography.sizes.bodySm,
+    color: Colors.light.textTertiary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  interruptionBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    marginTop: 8,
   },
 });
