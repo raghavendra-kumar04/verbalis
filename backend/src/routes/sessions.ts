@@ -97,61 +97,56 @@ router.post('/:id/turns', upload.single('audio'), async (req: AuthenticatedReque
   const questionAsked = currentTurn ? currentTurn.questionAsked : 'Explain the technical concept.';
 
   try {
-    let transcript = '';
-    if (audioFile && process.env.GROQ_API_KEY) {
-      transcript = await GroqService.transcribeAudio(audioFile.path);
-    } else {
-      transcript = 'In hash tables, separate chaining handles collisions using linked lists at each bucket index.';
-    }
-
-    // If answer is too short or ambiguous
-    if (transcript.split(' ').length < 3) {
+    if (!audioFile) {
       res.json({
         type: 'clarify',
-        message: 'Could you elaborate with a bit more detail? I could not hear that clearly.',
+        message: 'No audio was recorded. Please tap the microphone and speak your answer.',
+        nextQuestion: questionAsked,
+      });
+      return;
+    }
+
+    if (!process.env.GROQ_API_KEY) {
+      res.status(400).json({
+        type: 'config_error',
+        message: 'GROQ_API_KEY is not set in backend/.env. Please provide your free Groq API key to transcribe and evaluate speech.',
+      });
+      return;
+    }
+
+    const transcript = await GroqService.transcribeAudio(audioFile.path);
+
+    // If answer is silent, empty, or too short
+    if (!transcript || transcript.trim().length === 0 || transcript.split(/\s+/).length < 3) {
+      res.json({
+        type: 'clarify',
+        message: "I couldn't hear any speech clearly. Could you please repeat your answer?",
         nextQuestion: questionAsked,
       });
       return;
     }
 
     let feedback = null;
-    let nextQuestion = 'How would you optimize this under high concurrent load?';
+    let nextQuestion = 'Could you elaborate on the practical trade-offs of this approach?';
 
     if (context.feedbackMode === 'per_answer') {
-      if (process.env.GROQ_API_KEY) {
-        feedback = await GroqService.evaluateAnswer(
-          context.customTopicText || context.topicId,
-          questionAsked,
-          transcript,
-          context.coachingFocus
-        );
-        if (feedback.followUpQuestion) {
-          nextQuestion = feedback.followUpQuestion;
-        }
-      } else {
-        feedback = {
-          grammarScore: 4,
-          clarityScore: 4,
-          technicalAccuracyScore: 5,
-          interviewReadinessScore: 4,
-          strengths: ['Clear terminology and strong opening structure'],
-          improvements: ['Keep transitional pauses brief and deliberate'],
-          improvedAnswerVersion:
-            'In separate chaining, each bucket maintains a list of key-value pairs to isolate collision handling.',
-          fillerWordsDetected: ['um', 'like'],
-          technicalAccuracyNote: 'Accurately articulated O(1) average lookup performance.',
-          quickCoachTip: 'Take a 1-second pause instead of using verbal fillers during transitions.',
-        };
+      feedback = await GroqService.evaluateAnswer(
+        context.customTopicText || context.topicId,
+        questionAsked,
+        transcript,
+        context.coachingFocus,
+        currentTurn ? currentTurn.weaknessesNoted : []
+      );
+      if (feedback.followUpQuestion) {
+        nextQuestion = feedback.followUpQuestion;
       }
     } else {
       // In end-of-session mode, generate follow-up question via 8B without mid-session evaluation
-      if (process.env.GROQ_API_KEY) {
-        nextQuestion = await GroqService.generateFollowUpQuestion(
-          context.customTopicText || context.topicId,
-          questionAsked,
-          ['collision resolution', 'chaining']
-        );
-      }
+      nextQuestion = await GroqService.generateFollowUpQuestion(
+        context.customTopicText || context.topicId,
+        questionAsked,
+        ['covered concepts']
+      );
     }
 
     // Update ephemeral context (Notice: NO raw transcripts stored)

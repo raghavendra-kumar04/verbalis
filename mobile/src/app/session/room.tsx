@@ -6,6 +6,8 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Alert,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,8 +23,9 @@ import { INITIAL_TOPICS } from '../../constants/topics';
 import { Card } from '../../components/ui/Card';
 import { WaveformVisualizer } from '../../components/ui/WaveformVisualizer';
 import { MicOrb } from '../../components/ui/MicOrb';
+import { api } from '../../services/api';
 
-type RoomState = 'QUESTION_PLAYING' | 'LISTENING' | 'PROCESSING' | 'ERROR';
+type RoomState = 'QUESTION_PLAYING' | 'LISTENING' | 'PROCESSING' | 'CLARIFY' | 'ERROR';
 
 export default function VoicePracticeRoomScreen() {
   const router = useRouter();
@@ -39,9 +42,9 @@ export default function VoicePracticeRoomScreen() {
   const feedbackMode = params.feedbackMode || 'per_answer';
 
   // Session state
-  const [sessionId] = useState<string>('local_session_' + Date.now());
+  const [sessionId, setSessionId] = useState<string>('');
   const [questionNumber, setQuestionNumber] = useState(1);
-  const [currentQuestion, setCurrentQuestion] = useState(
+  const [currentQuestion, setCurrentQuestion] = useState<string>(
     params.customPrompt
       ? `Explain the core architectural trade-offs of ${params.customPrompt}.`
       : selectedTopic.sampleQuestion
@@ -49,22 +52,59 @@ export default function VoicePracticeRoomScreen() {
   const [roomState, setRoomState] = useState<RoomState>('QUESTION_PLAYING');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
+  const [clarifyMessage, setClarifyMessage] = useState<string | null>(null);
 
-  // expo-audio official recorder hook
+  // Native expo-audio recorder hook
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
+  // Web MediaRecorder references
+  const webMediaRecorderRef = useRef<any>(null);
+  const webAudioChunksRef = useRef<any[]>([]);
+  const webStreamRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
 
-  // Play question audio on mount or question change
+  // 1. Initialize session with backend
   useEffect(() => {
-    speakQuestion(currentQuestion);
+    let isMounted = true;
+    const initBackendSession = async () => {
+      try {
+        const response = await api.post('/sessions', {
+          topicId: selectedTopic.id,
+          customTopicText: params.customPrompt || undefined,
+          feedbackMode,
+          coachingFocus: params.coachingFocus || 'all_round',
+        });
+        if (isMounted && response.data.sessionId) {
+          setSessionId(response.data.sessionId);
+          if (response.data.firstQuestion) {
+            setCurrentQuestion(response.data.firstQuestion);
+          }
+        }
+      } catch (err) {
+        console.warn('Backend session init warning (will use fallback id):', err);
+        if (isMounted) {
+          setSessionId('session_' + Date.now());
+        }
+      }
+    };
+
+    initBackendSession();
     return () => {
+      isMounted = false;
       stopAudioRecording();
       Speech.stop();
       if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, []);
+
+  // 2. Play question audio on question change
+  useEffect(() => {
+    if (currentQuestion) {
+      speakQuestion(currentQuestion);
+    }
   }, [currentQuestion]);
 
-  // Duration counter during LISTENING (2 minutes max)
+  // 3. Duration counter during LISTENING (2 minutes max)
   useEffect(() => {
     if (roomState === 'LISTENING') {
       timerRef.current = setInterval(() => {
@@ -87,6 +127,7 @@ export default function VoicePracticeRoomScreen() {
   const speakQuestion = async (text: string) => {
     try {
       setRoomState('QUESTION_PLAYING');
+      setClarifyMessage(null);
       Speech.stop();
       if (isSpeakerEnabled) {
         const rate = params.speechSpeed === '1.1x' ? 1.1 : params.speechSpeed === '0.9x' ? 0.9 : 1.0;
@@ -114,90 +155,172 @@ export default function VoicePracticeRoomScreen() {
   };
 
   const startAudioRecording = async () => {
-    try {
-      const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) {
-        Alert.alert('Microphone Access', 'Please allow microphone access to practice speaking.');
-        return;
+    setClarifyMessage(null);
+    setRecordingDuration(0);
+
+    if (Platform.OS === 'web') {
+      // Real Web browser microphone recording via MediaRecorder API
+      try {
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          webStreamRef.current = stream;
+          webAudioChunksRef.current = [];
+          const mediaRecorder = new (window as any).MediaRecorder(stream);
+          webMediaRecorderRef.current = mediaRecorder;
+
+          mediaRecorder.ondataavailable = (event: any) => {
+            if (event.data && event.data.size > 0) {
+              webAudioChunksRef.current.push(event.data);
+            }
+          };
+
+          mediaRecorder.start(250);
+        }
+      } catch (err: any) {
+        console.warn('Web microphone access denied or not supported:', err);
+        Alert.alert('Microphone Access', 'Please allow microphone access in your browser to speak.');
       }
+    } else {
+      // Real Native audio recording via expo-audio
+      try {
+        const { granted } = await requestRecordingPermissionsAsync();
+        if (!granted) {
+          Alert.alert('Microphone Access', 'Please allow microphone access to practice speaking.');
+          return;
+        }
 
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-      });
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+        });
 
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
-      setRecordingDuration(0);
-    } catch (e) {
-      console.warn('Failed to start recording', e);
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
+      } catch (e) {
+        console.warn('Native recording start error:', e);
+      }
     }
   };
 
-  const stopAudioRecording = async (): Promise<string | null> => {
-    try {
-      if (audioRecorder.isRecording) {
-        await audioRecorder.stop();
-        return audioRecorder.uri;
+  const stopAudioRecording = async (): Promise<{ uri?: string; blob?: Blob } | null> => {
+    if (Platform.OS === 'web') {
+      return new Promise((resolve) => {
+        try {
+          if (webMediaRecorderRef.current && webMediaRecorderRef.current.state !== 'inactive') {
+            webMediaRecorderRef.current.onstop = () => {
+              const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
+              // Stop all audio tracks
+              if (webStreamRef.current) {
+                webStreamRef.current.getTracks().forEach((track: any) => track.stop());
+              }
+              resolve({ blob: audioBlob });
+            };
+            webMediaRecorderRef.current.stop();
+          } else {
+            resolve(null);
+          }
+        } catch {
+          resolve(null);
+        }
+      });
+    } else {
+      try {
+        if (audioRecorder.isRecording) {
+          await audioRecorder.stop();
+          return { uri: audioRecorder.uri ?? undefined };
+        }
+      } catch (e) {
+        console.warn('Failed to stop native recording', e);
       }
-    } catch (e) {
-      console.warn('Failed to stop recording', e);
+      return null;
     }
-    return null;
   };
 
   const handleFinishSpeaking = async () => {
     Speech.stop();
     setRoomState('PROCESSING');
-    await stopAudioRecording();
+    setClarifyMessage(null);
 
-    // Simulated evaluation turnaround
-    setTimeout(() => {
-      const mockFeedback = {
-        grammarScore: 4,
-        clarityScore: 4,
-        technicalAccuracyScore: 5,
-        interviewReadinessScore: 4,
-        strengths: [
-          'Precise technical terminology and logical structuring',
-          'Strong articulation of time/space trade-offs',
-        ],
-        improvements: [
-          'Noticeable hesitation when distinguishing linear from quadratic probing',
-          'Slightly fast cadence during the opening statement',
-        ],
-        improvedAnswerVersion:
-          'In separate chaining, each bucket maintains a secondary data structure to handle conflicting keys, avoiding immediate table resizing.',
-        fillerWordsDetected: ['um', 'like', 'basically'],
-        technicalAccuracyNote: 'Correctly articulated O(1) average lookup and O(n) worst-case degradation.',
-        quickCoachTip: 'Take a deliberate 1-second pause instead of saying "um" when transitioning.',
-      };
+    const recordingResult = await stopAudioRecording();
 
-      if (feedbackMode === 'per_answer') {
+    // Check if recording was virtually empty (less than 1.5 seconds)
+    if (recordingDuration < 2) {
+      setRoomState('CLARIFY');
+      setClarifyMessage("I didn't hear an answer. Please tap the microphone and speak your explanation.");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      const currentSessionId = sessionId || 'session_' + Date.now();
+
+      if (Platform.OS === 'web') {
+        if (recordingResult?.blob && recordingResult.blob.size > 100) {
+          formData.append('audio', recordingResult.blob, 'turn_recording.webm');
+        }
+      } else {
+        if (recordingResult?.uri) {
+          formData.append('audio', {
+            uri: recordingResult.uri,
+            name: 'turn_recording.m4a',
+            type: 'audio/m4a',
+          } as any);
+        }
+      }
+
+      const response = await api.post(`/sessions/${currentSessionId}/turns`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const data = response.data;
+
+      // If backend reports no speech or ambiguous audio
+      if (data.type === 'clarify') {
+        setRoomState('CLARIFY');
+        setClarifyMessage(data.message || "I couldn't hear any speech clearly. Could you please repeat your answer?");
+        return;
+      }
+
+      // If backend reports missing Groq key
+      if (data.type === 'config_error') {
+        setRoomState('ERROR');
+        Alert.alert('Configuration Required', data.message);
+        return;
+      }
+
+      // Real evaluated feedback from Groq LLaMA
+      if (feedbackMode === 'per_answer' && data.feedback) {
         router.push({
           pathname: '/session/feedback',
           params: {
             questionNumber: String(questionNumber),
             questionText: currentQuestion,
             topicName: selectedTopic.name,
-            feedbackData: JSON.stringify(mockFeedback),
-            nextQuestion: `How would you design a dynamic resizing strategy to maintain an optimal load factor without causing latency spikes?`,
-            sessionId,
+            feedbackData: JSON.stringify(data.feedback),
+            nextQuestion: data.nextQuestion || 'Could you elaborate on this approach?',
+            sessionId: currentSessionId,
             mode: feedbackMode,
           },
         });
       } else {
+        // End-of-session mode: advance directly to next question without mid-session evaluation
         setQuestionNumber((n) => n + 1);
-        setCurrentQuestion(
-          `How would you design a dynamic resizing strategy to maintain an optimal load factor without causing latency spikes?`
-        );
+        setCurrentQuestion(data.nextQuestion || 'Could you elaborate on the practical trade-offs?');
       }
-    }, 1500);
+    } catch (err: any) {
+      console.warn('Turn evaluation error:', err);
+      const serverMsg = err.response?.data?.message || 'Failed to process audio. Please check that backend is running.';
+      setRoomState('ERROR');
+      Alert.alert('Evaluation Notice', serverMsg);
+    }
   };
 
   const handleRestartTurn = async () => {
     await stopAudioRecording();
     setRecordingDuration(0);
+    setClarifyMessage(null);
     speakQuestion(currentQuestion);
   };
 
@@ -210,6 +333,10 @@ export default function VoicePracticeRoomScreen() {
         onPress: async () => {
           Speech.stop();
           await stopAudioRecording();
+          const currentSessionId = sessionId || 'session_' + Date.now();
+          try {
+            await api.post(`/sessions/${currentSessionId}/finish`);
+          } catch {}
           router.replace({
             pathname: '/session/report',
             params: {
@@ -234,9 +361,7 @@ export default function VoicePracticeRoomScreen() {
       <View style={styles.container}>
         {/* Top Action Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={handleEndSession}
-            style={styles.endSessionBtn}>
+          <TouchableOpacity onPress={handleEndSession} style={styles.endSessionBtn}>
             <MaterialIcons name="close" size={16} color={Colors.light.textSecondary} />
             <Text style={styles.endSessionText}>End Session</Text>
           </TouchableOpacity>
@@ -284,9 +409,7 @@ export default function VoicePracticeRoomScreen() {
             <Text style={styles.promptText}>{currentQuestion}</Text>
 
             <View style={styles.promptFooter}>
-              <TouchableOpacity
-                onPress={() => speakQuestion(currentQuestion)}
-                style={styles.repeatBtn}>
+              <TouchableOpacity onPress={() => speakQuestion(currentQuestion)} style={styles.repeatBtn}>
                 <MaterialIcons name="replay" size={16} color={Colors.light.primary} />
                 <Text style={styles.repeatText}>Repeat Question (AI Audio)</Text>
               </TouchableOpacity>
@@ -295,6 +418,14 @@ export default function VoicePracticeRoomScreen() {
               </Text>
             </View>
           </Card>
+
+          {/* Clarification Alert if User Didn't Speak or Audio was Empty */}
+          {clarifyMessage ? (
+            <View style={styles.clarifyBanner}>
+              <MaterialIcons name="info" size={20} color={Colors.light.cautionText} />
+              <Text style={styles.clarifyText}>{clarifyMessage}</Text>
+            </View>
+          ) : null}
 
           {/* Center Acoustic Energy & Waveform Visualizer */}
           <View style={styles.acousticCenter}>
@@ -314,8 +445,10 @@ export default function VoicePracticeRoomScreen() {
                 {roomState === 'LISTENING'
                   ? 'Listening to your spoken answer...'
                   : roomState === 'PROCESSING'
-                  ? 'Evaluating communication & accuracy...'
-                  : 'AI asking question...'}
+                  ? 'Transcribing & evaluating speech...'
+                  : roomState === 'CLARIFY'
+                  ? 'No speech detected — tap mic to answer'
+                  : 'AI ready'}
               </Text>
             </View>
 
@@ -537,6 +670,22 @@ const styles = StyleSheet.create({
   durationNote: {
     ...Typography.sizes.labelSm,
     color: Colors.light.textTertiary,
+  },
+  clarifyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.cautionTint,
+    borderRadius: BorderRadius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.cautionBorder,
+    gap: 10,
+  },
+  clarifyText: {
+    ...Typography.sizes.bodySm,
+    color: Colors.light.cautionText,
+    flex: 1,
+    lineHeight: 18,
   },
   acousticCenter: {
     alignItems: 'center',
