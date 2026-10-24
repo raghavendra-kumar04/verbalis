@@ -21,10 +21,10 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
+  destination: (_req: any, _file: any, cb: any) => {
     cb(null, uploadDir);
   },
-  filename: (_req, file, cb) => {
+  filename: (_req: any, file: any, cb: any) => {
     const originalExt = path.extname(file.originalname || '');
     const ext = originalExt || (file.mimetype && file.mimetype.includes('webm') ? '.webm' : '.m4a');
     cb(null, `turn_${Date.now()}_${uuidv4()}${ext}`);

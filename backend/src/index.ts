@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import dns from 'dns';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
@@ -28,7 +28,7 @@ app.use(cors());
 app.use(express.json());
 
 // Keep-alive and health check endpoint
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'OK', service: 'Verbalis Backend', timestamp: new Date().toISOString() });
 });
 
