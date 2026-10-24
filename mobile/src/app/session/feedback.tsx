@@ -27,6 +27,7 @@ export default function PerAnswerFeedbackScreen() {
     nextQuestion?: string;
     sessionId?: string;
     sessionTimeRemaining?: string;
+    mode?: string;
   }>();
 
   const questionNum = Number(params.questionNumber || '1');
@@ -59,6 +60,7 @@ export default function PerAnswerFeedbackScreen() {
         currentQuestion: params.nextQuestion,
         questionNumber: String(questionNum + 1),
         sessionTimeRemaining: params.sessionTimeRemaining,
+        feedbackMode: params.mode || 'per_answer',
       },
     });
   };

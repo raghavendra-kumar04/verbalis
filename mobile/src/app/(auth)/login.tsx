@@ -236,6 +236,26 @@ export default function LoginScreen() {
                 </Text>
               </Text>
             </TouchableOpacity>
+
+            {/* Terms and Privacy Policy Links */}
+            <View style={styles.legalLinksRow}>
+              <Text style={styles.legalNoticeText}>By continuing, you accept Verbalis </Text>
+              <View style={styles.legalSubRow}>
+                <TouchableOpacity
+                  onPress={() => router.push('/legal/terms' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Terms and Conditions">
+                  <Text style={styles.legalLink}>Terms & Conditions</Text>
+                </TouchableOpacity>
+                <Text style={styles.legalDivider}> • </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/legal/privacy' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Privacy Policy">
+                  <Text style={styles.legalLink}>Privacy Policy</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -400,5 +420,29 @@ const styles = StyleSheet.create({
   toggleFooterLink: {
     color: Colors.light.primary,
     fontWeight: '600',
+  },
+  legalLinksRow: {
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 4,
+  },
+  legalNoticeText: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
+  },
+  legalSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legalLink: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.primary,
+    fontWeight: '600',
+    paddingVertical: 4,
+  },
+  legalDivider: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
   },
 });

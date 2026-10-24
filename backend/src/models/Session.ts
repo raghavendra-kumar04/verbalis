@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 import { FeedbackMode, CoachingFocus } from '../types/index.js';
 
 export interface ISession extends Document {
+  sessionId?: string;
   userId: string;
   topicId: string;
   customTopicText?: string;
@@ -15,6 +16,7 @@ export interface ISession extends Document {
 }
 
 const SessionSchema: Schema = new Schema({
+  sessionId: { type: String, index: true },
   userId: { type: String, required: true, index: true },
   topicId: { type: String, required: true },
   customTopicText: { type: String },

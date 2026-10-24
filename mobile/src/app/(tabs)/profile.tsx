@@ -247,19 +247,46 @@ export default function ProfileSettingsScreen() {
           }
         />
 
-        {/* Privacy & Transient Architecture Policy */}
+        {/* Privacy & Legal Policies */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy & Data Policy</Text>
+          <Text style={styles.sectionTitle}>Privacy & Legal</Text>
           <Card style={styles.privacyCard}>
             <View style={styles.privacyHeader}>
               <MaterialIcons name="security" size={18} color={Colors.light.primary} />
               <Text style={styles.privacyTitle}>Zero Audio Persistence Guarantee</Text>
             </View>
             <Text style={styles.privacyBody}>
-              Verbalis never saves raw audio files, speech recordings, or verbatim conversational answer
-              transcripts in MongoDB. Spoken audio is transcribed on-the-fly via Groq Whisper and
-              evaluated in ephemeral memory. Only consolidated coaching metric summaries are retained.
+              Verbalis never saves raw audio files, speech recordings, or conversational answer transcripts.
+              Spoken audio is transcribed on-the-fly via Groq Whisper and evaluated in ephemeral memory.
             </Text>
+
+            <View style={styles.legalNavLinksContainer}>
+              <TouchableOpacity
+                onPress={() => router.push('/legal/privacy' as any)}
+                style={styles.legalNavRow}
+                accessibilityRole="button"
+                accessibilityLabel="View Privacy Policy">
+                <View style={styles.legalNavLeft}>
+                  <MaterialIcons name="privacy-tip" size={18} color={Colors.light.primary} />
+                  <Text style={styles.legalNavText}>Privacy Policy</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={Colors.light.textTertiary} />
+              </TouchableOpacity>
+
+              <View style={styles.legalNavDivider} />
+
+              <TouchableOpacity
+                onPress={() => router.push('/legal/terms' as any)}
+                style={styles.legalNavRow}
+                accessibilityRole="button"
+                accessibilityLabel="View Terms & Conditions">
+                <View style={styles.legalNavLeft}>
+                  <MaterialIcons name="description" size={18} color={Colors.light.primary} />
+                  <Text style={styles.legalNavText}>Terms & Conditions</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={Colors.light.textTertiary} />
+              </TouchableOpacity>
+            </View>
           </Card>
         </View>
 
@@ -472,5 +499,35 @@ const styles = StyleSheet.create({
     ...Typography.sizes.bodySm,
     color: Colors.light.textSecondary,
     lineHeight: 20,
+  },
+  legalNavLinksContainer: {
+    marginTop: 10,
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 196, 215, 0.3)',
+    overflow: 'hidden',
+  },
+  legalNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 44,
+  },
+  legalNavLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  legalNavText: {
+    ...Typography.sizes.bodyMd,
+    color: Colors.light.onSurface,
+    fontWeight: '500',
+  },
+  legalNavDivider: {
+    height: 1,
+    backgroundColor: 'rgba(200, 196, 215, 0.25)',
   },
 });

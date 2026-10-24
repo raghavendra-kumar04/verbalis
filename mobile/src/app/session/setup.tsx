@@ -14,6 +14,7 @@ import { INITIAL_TOPICS } from '../../constants/topics';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { api } from '../../services/api';
 
 export default function SessionSetupScreen() {
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function SessionSetupScreen() {
     'Technical Accuracy',
     'Reducing Filler Words',
   ]);
+  const [isStarting, setIsStarting] = useState(false);
 
   const toggleFocus = (item: string) => {
     if (selectedFocuses.includes(item)) {
@@ -53,17 +55,47 @@ export default function SessionSetupScreen() {
     }
   };
 
-  const handleStartSession = () => {
-    router.push({
-      pathname: '/session/room',
-      params: {
+  const handleStartSession = async () => {
+    if (isStarting) return;
+    try {
+      setIsStarting(true);
+      const coachingFocus = selectedFocuses.join(',');
+      const res = await api.post('/sessions', {
         topicId: selectedTopic.id,
-        customPrompt: params.customPrompt || '',
+        customTopicText: params.customPrompt || undefined,
         feedbackMode,
-        speechSpeed,
-        coachingFocus: selectedFocuses.join(','),
-      },
-    });
+        coachingFocus,
+      });
+
+      router.push({
+        pathname: '/session/room',
+        params: {
+          topicId: selectedTopic.id,
+          topicName: selectedTopic.name,
+          customPrompt: params.customPrompt || '',
+          feedbackMode,
+          speechSpeed,
+          coachingFocus,
+          sessionId: res.data.sessionId,
+          currentQuestion: res.data.firstQuestion || selectedTopic.sampleQuestion,
+        },
+      });
+    } catch (err: any) {
+      console.warn('Backend session start notice, using local initialization:', err.message);
+      router.push({
+        pathname: '/session/room',
+        params: {
+          topicId: selectedTopic.id,
+          topicName: selectedTopic.name,
+          customPrompt: params.customPrompt || '',
+          feedbackMode,
+          speechSpeed,
+          coachingFocus: selectedFocuses.join(','),
+        },
+      });
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   return (
@@ -251,6 +283,8 @@ export default function SessionSetupScreen() {
           <Button
             title="Start Practice Session"
             onPress={handleStartSession}
+            loading={isStarting}
+            disabled={isStarting}
             size="lg"
             icon={<MaterialIcons name="arrow-forward" size={18} color="#fff" />}
             iconPosition="right"

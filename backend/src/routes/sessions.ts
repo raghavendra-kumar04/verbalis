@@ -84,9 +84,10 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       expiresAt: Date.now() + 4 * 60 * 60 * 1000, // 4 hours TTL
     });
 
-    // Optionally create DB record
+    // Optionally create DB record with sessionId
     try {
       await Session.create({
+        sessionId,
         userId,
         topicId: topicId || 'dsa',
         customTopicText,
@@ -116,10 +117,62 @@ router.post('/:id/turns', upload.single('audio'), async (req: AuthenticatedReque
   const sessionId = String(req.params.id);
   const audioFile = req.file;
 
-  const context = SessionContextService.getContext(sessionId);
+  let context = SessionContextService.getContext(sessionId);
   if (!context) {
-    res.status(404).json({ message: 'Session expired or not found. Please start a new session.' });
-    return;
+    // Attempt auto-recovery from MongoDB active session record
+    try {
+      const dbSession = await Session.findOne({
+        $or: [{ sessionId }, { userId: req.user?.userId, status: 'active' }],
+      }).sort({ startedAt: -1 }).lean();
+
+      if (dbSession) {
+        context = {
+          sessionId,
+          topicId: dbSession.topicId || 'dsa',
+          customTopicText: dbSession.customTopicText,
+          feedbackMode: (dbSession.feedbackMode as any) || 'per_answer',
+          coachingFocus: (dbSession.coachingFocus as any) || 'all_round',
+          currentDifficulty: 'beginner',
+          startedAt: dbSession.startedAt ? new Date(dbSession.startedAt).getTime() : Date.now(),
+          turns: [
+            {
+              questionAsked: 'Explain the core principles and architectural trade-offs of this topic.',
+              keyPointsMentioned: [],
+              weaknessesNoted: [],
+              followUpHint: '',
+              difficultyLevel: 'beginner',
+            },
+          ],
+          expiresAt: Date.now() + 4 * 60 * 60 * 1000,
+        };
+        SessionContextService.saveContext(context);
+      }
+    } catch (dbErr) {
+      console.warn('Session context DB recovery notice:', dbErr);
+    }
+  }
+
+  if (!context) {
+    // Graceful auto-creation fallback so rehearsal turn is never rejected
+    context = {
+      sessionId,
+      topicId: 'dsa',
+      feedbackMode: 'per_answer',
+      coachingFocus: 'all_round',
+      currentDifficulty: 'beginner',
+      startedAt: Date.now(),
+      turns: [
+        {
+          questionAsked: 'Explain the core principles and practical applications of this concept.',
+          keyPointsMentioned: [],
+          weaknessesNoted: [],
+          followUpHint: '',
+          difficultyLevel: 'beginner',
+        },
+      ],
+      expiresAt: Date.now() + 4 * 60 * 60 * 1000,
+    };
+    SessionContextService.saveContext(context);
   }
 
   const currentTurn = context.turns[context.turns.length - 1];
@@ -250,7 +303,7 @@ router.post('/:id/finish', async (req: AuthenticatedRequest, res: Response): Pro
     return;
   }
 
-  const context = SessionContextService.getContext(sessionId);
+  let context = SessionContextService.getContext(sessionId);
   let durationSeconds = Number(req.body?.durationSeconds || 0);
   if (durationSeconds <= 0 && context?.startedAt) {
     durationSeconds = Math.max(10, Math.round((Date.now() - context.startedAt) / 1000));
@@ -258,7 +311,19 @@ router.post('/:id/finish', async (req: AuthenticatedRequest, res: Response): Pro
     durationSeconds = 60;
   }
 
-  const topicLabel = context?.customTopicText || context?.topicId || 'Technical Interview';
+  let topicId = context ? context.topicId : 'dsa';
+  let customTopic = context?.customTopicText;
+  if (!context) {
+    try {
+      const dbS = await Session.findOne({ sessionId }).lean();
+      if (dbS) {
+        topicId = dbS.topicId;
+        customTopic = dbS.customTopicText;
+      }
+    } catch {}
+  }
+
+  const topicLabel = customTopic || topicId || 'Technical Interview';
   const turns = context?.turns || [];
 
   // Generate dynamic, personalized summary based strictly on what user spoke
@@ -271,7 +336,7 @@ router.post('/:id/finish', async (req: AuthenticatedRequest, res: Response): Pro
     await SessionSummary.create({
       sessionId,
       userId,
-      topicId: context ? context.topicId : 'dsa',
+      topicId,
       overallScore: summary.overallScore,
       headline: summary.headline,
       executiveSummary: summary.executiveSummary,

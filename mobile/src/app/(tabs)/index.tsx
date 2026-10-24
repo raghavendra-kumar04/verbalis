@@ -204,9 +204,6 @@ export default function HomeDashboardScreen() {
               <Text style={styles.metricNumber}>
                 {progress && progress.totalSessions > 0 ? `${progress.averageClarity} / 5` : '—'}
               </Text>
-              {progress && progress.totalSessions > 0 && (
-                <Badge label="Real DB" variant="neutral" style={styles.trendBadge} />
-              )}
             </View>
           </View>
           <View style={styles.metricItem}>
