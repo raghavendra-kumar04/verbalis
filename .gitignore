@@ -23,3 +23,7 @@ temp_sessions/
 # OS files
 .DS_Store
 Thumbs.db
+
+
+DEPLOYMENT_AND_APK_GUIDE.md
+render.yaml

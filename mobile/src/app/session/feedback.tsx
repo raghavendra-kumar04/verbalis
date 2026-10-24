@@ -6,7 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
@@ -14,9 +14,11 @@ import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { api } from '../../services/api';
 
 export default function PerAnswerFeedbackScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     questionNumber?: string;
     questionText?: string;
@@ -24,52 +26,67 @@ export default function PerAnswerFeedbackScreen() {
     feedbackData?: string;
     nextQuestion?: string;
     sessionId?: string;
+    sessionTimeRemaining?: string;
   }>();
 
   const questionNum = Number(params.questionNumber || '1');
   const feedback = params.feedbackData
     ? JSON.parse(params.feedbackData)
-    : {
-        grammarScore: 4,
-        clarityScore: 4,
-        technicalAccuracyScore: 5,
-        interviewReadinessScore: 4,
-        strengths: ['Clear explanation of separate chaining using linked lists or buckets. Confident opening tone.'],
-        improvements: ['Noticeable hesitation when distinguishing linear from quadratic probing. High filler word frequency.'],
-        improvedAnswerVersion:
-          'In separate chaining, each bucket maintains a secondary data structure to store conflicting keys, preventing table resizing until a threshold load factor is reached.',
-        fillerWordsDetected: ['um', 'like', 'basically'],
-        technicalAccuracyNote: 'Accurately noted O(1) average lookup. Note to mention primary clustering in open addressing for full interview completeness.',
-        quickCoachTip: 'Take a 1-second pause instead of using "um" when transitioning between chaining and open addressing.',
-      };
+    : null;
+
+  // Guard: if no feedback data was passed, go straight to next question
+  // (this can happen when feedbackMode is 'end_of_session' or on error)
+  React.useEffect(() => {
+    if (!feedback) {
+      handleNextQuestion();
+    }
+  }, []);
 
   const handleHearFeedback = () => {
+    if (!feedback) return;
     Speech.stop();
-    const spokenSummary = `Here is your feedback. What went well: ${feedback.strengths[0] || ''}. An area to refine: ${feedback.improvements[0] || ''}. Quick tip: ${feedback.quickCoachTip || ''}`;
+    const spokenSummary = `Here is your feedback. What went well: ${feedback.strengths?.[0] || ''}. An area to refine: ${feedback.improvements?.[0] || ''}. Quick tip: ${feedback.quickCoachTip || ''}`;
     Speech.speak(spokenSummary, { rate: 1.0, language: 'en-US' });
   };
 
   const handleNextQuestion = () => {
     Speech.stop();
-    if (questionNum >= 3) {
-      // Reached 3 questions -> Final report
-      router.replace({
-        pathname: '/session/report',
-        params: {
-          topicName: params.topicName || 'Technical Concepts',
-          questionCount: '3',
-          durationText: '4m 30s',
-        },
-      });
-    } else {
-      router.replace({
-        pathname: '/session/room',
-        params: {
-          topicId: 'dsa',
-          feedbackMode: 'per_answer',
-        },
-      });
+    router.replace({
+      pathname: '/session/room',
+      params: {
+        sessionId: params.sessionId,
+        topicName: params.topicName,
+        currentQuestion: params.nextQuestion,
+        questionNumber: String(questionNum + 1),
+        sessionTimeRemaining: params.sessionTimeRemaining,
+      },
+    });
+  };
+
+  const handleFinishEarly = async () => {
+    Speech.stop();
+    let summaryData = '';
+    if (params.sessionId) {
+      try {
+        const res = await api.post(`/sessions/${params.sessionId}/finish`);
+        if (res.data?.summary) {
+          summaryData = JSON.stringify(res.data.summary);
+        }
+      } catch (err) {
+        console.warn('Feedback finish early notice:', err);
+      }
     }
+
+    router.replace({
+      pathname: '/session/report',
+      params: {
+        sessionId: params.sessionId,
+        topicName: params.topicName || 'Technical Concepts',
+        questionCount: String(questionNum),
+        durationText: 'Session Concluded',
+        summaryData,
+      },
+    });
   };
 
   return (
@@ -79,9 +96,9 @@ export default function PerAnswerFeedbackScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.headerDot} />
-            <Text style={styles.headerTitle}>Answer Feedback • Question {questionNum} of 3</Text>
+            <Text style={styles.headerTitle}>Answer Feedback • Question {questionNum}</Text>
           </View>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+          <TouchableOpacity onPress={handleFinishEarly} style={styles.closeBtn}>
             <MaterialIcons name="close" size={20} color={Colors.light.textTertiary} />
           </TouchableOpacity>
         </View>
@@ -102,7 +119,12 @@ export default function PerAnswerFeedbackScreen() {
         </View>
 
         {/* Feedback Sections Grid */}
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: 130 + Math.max(insets.bottom, 16) },
+          ]}
+          showsVerticalScrollIndicator={false}>
           {/* Section 1: What Went Well */}
           <View style={styles.successSection}>
             <View style={styles.sectionHeadingRow}>
@@ -112,7 +134,7 @@ export default function PerAnswerFeedbackScreen() {
               <Text style={styles.successHeading}>What Went Well</Text>
             </View>
             <Text style={styles.successBody}>
-              {feedback.strengths[0] || 'Clear, confident explanation with accurate technical framing.'}
+              {feedback?.strengths?.[0] || 'Keep going — explain clearly and you will improve each time.'}
             </Text>
           </View>
 
@@ -125,76 +147,77 @@ export default function PerAnswerFeedbackScreen() {
               <Text style={styles.cautionHeading}>Areas to Refine</Text>
             </View>
             <Text style={styles.cautionBody}>
-              {feedback.improvements[0] || 'Minor pauses observed. Keep transitions succinct.'}
+              {feedback?.improvements?.[0] || 'Try to structure your answer: definition → example → trade-offs.'}
             </Text>
           </View>
 
           {/* Section 3: Phrasing & Grammar Upgrade */}
-          <Card style={styles.upgradeCard}>
-            <View style={styles.upgradeHeader}>
-              <View style={styles.sectionHeadingRow}>
-                <MaterialIcons name="auto-awesome" size={18} color={Colors.light.primary} />
-                <Text style={styles.upgradeHeading}>Phrasing & Grammar Upgrade</Text>
-              </View>
-              <Badge label="AI Upgrade" variant="neutral" />
-            </View>
-
-            <View style={styles.comparisonBox}>
-              <View style={styles.insteadBox}>
-                <Text style={styles.insteadLabel}>Instead of saying:</Text>
-                <Text style={styles.insteadText}>
-                  "So chaining basically puts everything in a list whenever there is a collision..."
-                </Text>
-              </View>
-
-              <View style={styles.strongerBox}>
-                <View style={styles.strongerHeader}>
-                  <MaterialIcons name="trending-up" size={14} color={Colors.light.primary} />
-                  <Text style={styles.strongerLabel}>Stronger version:</Text>
+          {feedback?.improvedAnswerVersion ? (
+            <Card style={styles.upgradeCard}>
+              <View style={styles.upgradeHeader}>
+                <View style={styles.sectionHeadingRow}>
+                  <MaterialIcons name="auto-awesome" size={18} color={Colors.light.primary} />
+                  <Text style={styles.upgradeHeading}>Phrasing & Grammar Upgrade</Text>
                 </View>
-                <Text style={styles.strongerText}>
-                  "{feedback.improvedAnswerVersion}"
-                </Text>
+                <Badge label="AI Upgrade" variant="neutral" />
               </View>
-            </View>
-          </Card>
+
+              <View style={styles.comparisonBox}>
+                <View style={styles.strongerBox}>
+                  <View style={styles.strongerHeader}>
+                    <MaterialIcons name="trending-up" size={14} color={Colors.light.primary} />
+                    <Text style={styles.strongerLabel}>Stronger version:</Text>
+                  </View>
+                  <Text style={styles.strongerText}>
+                    {`"${feedback.improvedAnswerVersion}"`}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          ) : null}
 
           {/* Section 4: Technical Accuracy Observation */}
-          <Card style={styles.accuracyCard}>
-            <View style={styles.sectionHeadingRow}>
-              <View style={styles.codeIconBox}>
-                <MaterialIcons name="code" size={16} color={Colors.light.secondary} />
+          {feedback?.technicalAccuracyNote ? (
+            <Card style={styles.accuracyCard}>
+              <View style={styles.sectionHeadingRow}>
+                <View style={styles.codeIconBox}>
+                  <MaterialIcons name="code" size={16} color={Colors.light.secondary} />
+                </View>
+                <Text style={styles.accuracyHeading}>Technical Accuracy Observation</Text>
               </View>
-              <Text style={styles.accuracyHeading}>Technical Accuracy Observation</Text>
-            </View>
-            <Text style={styles.accuracyBody}>
-              {feedback.technicalAccuracyNote || 'Technical definition aligns with industry standards.'}
-            </Text>
-          </Card>
+              <Text style={styles.accuracyBody}>
+                {feedback.technicalAccuracyNote}
+              </Text>
+            </Card>
+          ) : null}
 
           {/* Section 5: Quick Spoken Coach Tip */}
-          <View style={styles.tipBox}>
-            <Text style={styles.tipEmoji}>💡</Text>
-            <View style={styles.tipContent}>
-              <Text style={styles.tipHeading}>Quick Spoken Coach Tip</Text>
-              <Text style={styles.tipBody}>
-                {feedback.quickCoachTip || 'Pause for 1 second instead of verbal fillers.'}
-              </Text>
+          {feedback?.quickCoachTip ? (
+            <View style={styles.tipBox}>
+              <Text style={styles.tipEmoji}>💡</Text>
+              <View style={styles.tipContent}>
+                <Text style={styles.tipHeading}>Quick Spoken Coach Tip</Text>
+                <Text style={styles.tipBody}>
+                  {feedback.quickCoachTip}
+                </Text>
+              </View>
             </View>
-          </View>
+          ) : null}
         </ScrollView>
 
         {/* Bottom Docked Floating Action Area */}
-        <View style={styles.bottomBar}>
-          <TouchableOpacity
-            onPress={handleHearFeedback}
-            style={styles.listenBtn}>
-            <MaterialIcons name="graphic-eq" size={20} color={Colors.light.primary} />
-            <Text style={styles.listenBtnText}>Hear AI Coaching (Voice summary)</Text>
-          </TouchableOpacity>
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+          {feedback && (
+            <TouchableOpacity
+              onPress={handleHearFeedback}
+              style={styles.listenBtn}>
+              <MaterialIcons name="graphic-eq" size={20} color={Colors.light.primary} />
+              <Text style={styles.listenBtnText}>Hear AI Coaching (Voice summary)</Text>
+            </TouchableOpacity>
+          )}
 
           <Button
-            title={`Next Question (${questionNum < 3 ? questionNum + 1 : 3} of 3)`}
+            title={`Continue to Question ${questionNum + 1}`}
             onPress={handleNextQuestion}
             size="lg"
             icon={<MaterialIcons name="arrow-forward" size={18} color="#fff" />}

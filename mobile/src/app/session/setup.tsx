@@ -6,7 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme';
@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 
 export default function SessionSetupScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ topicId?: string; customPrompt?: string }>();
 
   const selectedTopic =
@@ -86,7 +87,12 @@ export default function SessionSetupScreen() {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: 90 + Math.max(insets.bottom, 16) },
+          ]}
+          showsVerticalScrollIndicator={false}>
           {/* Active Topic Summary Card */}
           <Card style={styles.topicSummaryCard}>
             <View style={styles.topicHeaderRow}>
@@ -241,7 +247,7 @@ export default function SessionSetupScreen() {
         </ScrollView>
 
         {/* Bottom Pinned CTA */}
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <Button
             title="Start Practice Session"
             onPress={handleStartSession}

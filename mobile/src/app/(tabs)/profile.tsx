@@ -23,7 +23,7 @@ export default function ProfileSettingsScreen() {
   const router = useRouter();
   const { userEmail, firstName, preferences, updateProfile, logout } = useAuth();
 
-  const [nameInput, setNameInput] = useState(firstName || 'Raghavendra');
+  const [nameInput, setNameInput] = useState(firstName || '');
   const [feedbackMode, setFeedbackMode] = useState<'per_answer' | 'end_of_session'>(
     preferences.preferredFeedbackMode || 'per_answer'
   );
@@ -112,8 +112,8 @@ export default function ProfileSettingsScreen() {
               <MaterialIcons name="person" size={28} color={Colors.light.primary} />
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{firstName || 'Raghavendra'}</Text>
-              <Text style={styles.userRole}>{userEmail || 'raghavendra@gmail.com'}</Text>
+              <Text style={styles.userName}>{firstName || (userEmail ? userEmail.split('@')[0] : 'User')}</Text>
+              <Text style={styles.userRole}>{userEmail || ''}</Text>
             </View>
             <Badge label="Personal" variant="primary" />
           </View>

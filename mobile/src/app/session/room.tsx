@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   Alert,
@@ -10,7 +11,7 @@ import {
   AppStateStatus,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
@@ -33,15 +34,21 @@ type RoomState = 'QUESTION_PLAYING' | 'LISTENING' | 'PROCESSING' | 'CLARIFY' | '
 
 export default function VoicePracticeRoomScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { preferences } = useAuth();
   const isReducedMotion = preferences?.reducedMotion || false;
 
   const params = useLocalSearchParams<{
     topicId?: string;
+    topicName?: string;
     customPrompt?: string;
     feedbackMode?: 'per_answer' | 'end_of_session';
     speechSpeed?: string;
     coachingFocus?: string;
+    sessionId?: string;
+    currentQuestion?: string;
+    questionNumber?: string;
+    sessionTimeRemaining?: string;
   }>();
 
   const selectedTopic =
@@ -49,12 +56,18 @@ export default function VoicePracticeRoomScreen() {
   const feedbackMode = params.feedbackMode || preferences?.preferredFeedbackMode || 'per_answer';
 
   // Session state
-  const [sessionId, setSessionId] = useState<string>('');
-  const [questionNumber, setQuestionNumber] = useState(1);
+  const [sessionId, setSessionId] = useState<string>(params.sessionId || '');
+  const [questionNumber, setQuestionNumber] = useState<number>(
+    params.questionNumber ? Number(params.questionNumber) : 1
+  );
   const [currentQuestion, setCurrentQuestion] = useState<string>(
-    params.customPrompt
-      ? `Explain the core architectural trade-offs of ${params.customPrompt}.`
-      : selectedTopic.sampleQuestion
+    params.currentQuestion ||
+      (params.customPrompt
+        ? `Explain the core architectural trade-offs of ${params.customPrompt}.`
+        : selectedTopic.sampleQuestion)
+  );
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState<number>(
+    params.sessionTimeRemaining ? Number(params.sessionTimeRemaining) : 600
   );
   const [roomState, setRoomState] = useState<RoomState>('QUESTION_PLAYING');
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -63,7 +76,7 @@ export default function VoicePracticeRoomScreen() {
   const [ttsFailedNotice, setTtsFailedNotice] = useState<string | null>(null);
   const [isInterrupted, setIsInterrupted] = useState(false);
 
-  // Native expo-audio recorder hook
+  // High quality static audio recorder instance - avoids releasing shared object across turns
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   // Web MediaRecorder references
@@ -71,10 +84,27 @@ export default function VoicePracticeRoomScreen() {
   const webAudioChunksRef = useRef<any[]>([]);
   const webStreamRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
+  const isRecordingStartingRef = useRef<boolean>(false);
+  const isNativeRecordingActiveRef = useRef<boolean>(false);
 
   // 1. Initialize session with backend
   useEffect(() => {
     let isMounted = true;
+    if (params.sessionId) {
+      setSessionId(params.sessionId);
+      if (params.currentQuestion) {
+        setCurrentQuestion(params.currentQuestion);
+      }
+      return () => {
+        isMounted = false;
+        if (isNativeRecordingActiveRef.current) {
+          stopAudioRecording();
+        }
+        Speech.stop();
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    }
+
     const initBackendSession = async () => {
       try {
         const response = await api.post('/sessions', {
@@ -100,11 +130,29 @@ export default function VoicePracticeRoomScreen() {
     initBackendSession();
     return () => {
       isMounted = false;
-      stopAudioRecording();
+      if (isNativeRecordingActiveRef.current) {
+        stopAudioRecording();
+      }
       Speech.stop();
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // 10-Minute Overall Session Countdown Timer — runs once on mount, does not reset on question changes
+  useEffect(() => {
+    const sessionCountdown = setInterval(() => {
+      setSessionTimeRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(sessionCountdown);
+          handleFinishSession(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(sessionCountdown);
+  }, []); // <-- INTENTIONALLY empty deps: timer starts once on mount, not on each question
 
   // 2. Play question audio on question change
   useEffect(() => {
@@ -132,12 +180,13 @@ export default function VoicePracticeRoomScreen() {
     };
   }, [roomState]);
 
-  // 4. Duration counter during LISTENING (2 minutes max)
+  // 4. Duration counter during LISTENING (2 minutes max auto-submit)
   useEffect(() => {
     if (roomState === 'LISTENING' && !isInterrupted) {
       timerRef.current = setInterval(() => {
         setRecordingDuration((prev) => {
           if (prev >= 120) {
+            // Auto-finish only if we have actual audio (duration > 0 means recording started)
             handleFinishSpeaking();
             return 120;
           }
@@ -197,6 +246,8 @@ export default function VoicePracticeRoomScreen() {
   };
 
   const startAudioRecording = async () => {
+    if (isRecordingStartingRef.current) return;
+    isRecordingStartingRef.current = true;
     setClarifyMessage(null);
     setRecordingDuration(0);
 
@@ -223,12 +274,15 @@ export default function VoicePracticeRoomScreen() {
       } catch (err: any) {
         console.warn('Web microphone access denied or not supported:', err);
         Alert.alert('Microphone Access', 'Please allow microphone access in your browser to speak.');
+      } finally {
+        isRecordingStartingRef.current = false;
       }
     } else {
       try {
         const { granted } = await requestRecordingPermissionsAsync();
         if (!granted) {
           Alert.alert('Microphone Access', 'Please allow microphone access to practice speaking.');
+          isRecordingStartingRef.current = false;
           return;
         }
 
@@ -237,15 +291,32 @@ export default function VoicePracticeRoomScreen() {
           playsInSilentMode: true,
         });
 
-        await audioRecorder.prepareToRecordAsync();
+        if (isNativeRecordingActiveRef.current || audioRecorder.isRecording) {
+          isRecordingStartingRef.current = false;
+          return;
+        }
+
+        try {
+          await audioRecorder.prepareToRecordAsync();
+        } catch (prepErr: any) {
+          // If already prepared, proceed safely to record
+          if (!prepErr.message?.includes('already been prepared')) {
+            console.warn('Recorder preparation warning:', prepErr.message);
+          }
+        }
+
         audioRecorder.record();
+        isNativeRecordingActiveRef.current = true;
       } catch (e) {
         console.warn('Native recording start error:', e);
+      } finally {
+        isRecordingStartingRef.current = false;
       }
     }
   };
 
   const stopAudioRecording = async (): Promise<{ uri?: string; blob?: Blob } | null> => {
+    isRecordingStartingRef.current = false;
     if (Platform.OS === 'web') {
       return new Promise((resolve) => {
         try {
@@ -266,15 +337,18 @@ export default function VoicePracticeRoomScreen() {
         }
       });
     } else {
-      try {
-        if (audioRecorder.isRecording) {
-          await audioRecorder.stop();
-          return { uri: audioRecorder.uri ?? undefined };
-        }
-      } catch (e) {
-        console.warn('Failed to stop native recording', e);
+      if (!isNativeRecordingActiveRef.current && !audioRecorder.isRecording) {
+        return null;
       }
-      return null;
+      isNativeRecordingActiveRef.current = false;
+      try {
+        await audioRecorder.stop();
+        const recordedUri = audioRecorder.uri ?? undefined;
+        return { uri: recordedUri };
+      } catch (e: any) {
+        console.warn('Native stop warning:', e.message);
+        return null;
+      }
     }
   };
 
@@ -289,6 +363,12 @@ export default function VoicePracticeRoomScreen() {
     if (recordingDuration < 2) {
       setRoomState('CLARIFY');
       setClarifyMessage("I didn't hear an answer. Please tap the microphone and speak your explanation.");
+      return;
+    }
+
+    if (Platform.OS !== 'web' && !recordingResult?.uri) {
+      setRoomState('CLARIFY');
+      setClarifyMessage("Could not capture audio recording from the microphone. Please tap the mic and speak your answer.");
       return;
     }
 
@@ -310,10 +390,13 @@ export default function VoicePracticeRoomScreen() {
         }
       }
 
+      // Note: Do NOT manually override Content-Type with 'multipart/form-data' in React Native,
+      // as Axios/React Native must attach the multipart boundary automatically to prevent network errors.
       const response = await api.post(`/sessions/${currentSessionId}/turns`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          Accept: 'application/json',
         },
+        timeout: 60000,
       });
 
       const data = response.data;
@@ -338,20 +421,22 @@ export default function VoicePracticeRoomScreen() {
             questionText: currentQuestion,
             topicName: selectedTopic.name,
             feedbackData: JSON.stringify(data.feedback),
-            nextQuestion: data.nextQuestion || 'Could you elaborate on this approach?',
+            nextQuestion: data.nextQuestion || 'How would you scale this design under high concurrency?',
             sessionId: currentSessionId,
             mode: feedbackMode,
+            sessionTimeRemaining: String(sessionTimeRemaining),
           },
         });
       } else {
         setQuestionNumber((n) => n + 1);
-        setCurrentQuestion(data.nextQuestion || 'Could you elaborate on the practical trade-offs?');
+        setCurrentQuestion(data.nextQuestion || 'How would you scale this design under high concurrency?');
       }
     } catch (err: any) {
       console.warn('Turn evaluation error:', err);
-      const serverMsg = err.response?.data?.message || 'Failed to process audio. Please check that backend is running.';
-      setRoomState('ERROR');
-      Alert.alert('Evaluation Notice', serverMsg);
+      // Do NOT navigate away on error \u2014 show in-page retry message so user stays in session
+      const serverMsg = err.response?.data?.message || err.message || 'Could not process audio. Please try again.';
+      setRoomState('CLARIFY');
+      setClarifyMessage(`\u26a0\ufe0f ${serverMsg} \u2014 Tap the mic to retry your answer.`);
     }
   };
 
@@ -362,30 +447,53 @@ export default function VoicePracticeRoomScreen() {
     speakQuestion(currentQuestion);
   };
 
-  const handleEndSession = () => {
-    Alert.alert('End Session', 'Are you sure you want to end this practice session?', [
-      { text: 'Resume Practice', style: 'cancel' },
-      {
-        text: 'Finish & View Report',
-        style: 'destructive',
-        onPress: async () => {
-          Speech.stop();
-          await stopAudioRecording();
-          const currentSessionId = sessionId || 'session_' + Date.now();
-          try {
-            await api.post(`/sessions/${currentSessionId}/finish`);
-          } catch {}
-          router.replace({
-            pathname: '/session/report',
-            params: {
-              topicName: selectedTopic.name,
-              questionCount: String(questionNumber),
-              durationText: `${Math.floor(recordingDuration / 60)}m ${recordingDuration % 60}s`,
-            },
-          });
-        },
+  const handleFinishSession = async (auto = false) => {
+    Speech.stop();
+    await stopAudioRecording();
+    const currentSessionId = sessionId || 'session_' + Date.now();
+    const elapsed = Math.max(1, 600 - sessionTimeRemaining);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const durationText = `${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+
+    let summaryData = '';
+    try {
+      const res = await api.post(`/sessions/${currentSessionId}/finish`, {
+        durationSeconds: elapsed,
+      });
+      if (res.data?.summary) {
+        summaryData = JSON.stringify(res.data.summary);
+      }
+    } catch (e) {
+      console.warn('Finish session error:', e);
+    }
+
+    router.replace({
+      pathname: '/session/report',
+      params: {
+        sessionId: currentSessionId,
+        topicName: selectedTopic.name,
+        questionCount: String(questionNumber),
+        durationText,
+        mode: feedbackMode,
+        summaryData,
       },
-    ]);
+    });
+  };
+
+  const handleEndSession = () => {
+    Alert.alert(
+      'End Practice Session',
+      'Are you sure you want to conclude this rehearsal session and view your evaluation report?',
+      [
+        { text: 'Keep Practicing', style: 'cancel' },
+        {
+          text: 'Finish & View Report',
+          style: 'destructive',
+          onPress: () => handleFinishSession(false),
+        },
+      ]
+    );
   };
 
   const formatTimer = (seconds: number) => {
@@ -404,18 +512,30 @@ export default function VoicePracticeRoomScreen() {
             style={styles.endSessionBtn}
             accessibilityRole="button"
             accessibilityLabel="End session">
-            <MaterialIcons name="close" size={16} color={Colors.light.textSecondary} />
-            <Text style={styles.endSessionText}>End Session</Text>
+            <MaterialIcons name="close" size={16} color={Colors.light.critical} />
+            <Text style={[styles.endSessionText, { color: Colors.light.critical }]}>End</Text>
           </TouchableOpacity>
 
           <View style={styles.counterPill}>
-            <Text style={styles.counterText}>Question {questionNumber} of 3</Text>
+            <Text style={styles.counterText}>Question {questionNumber}</Text>
+          </View>
+
+          <View style={styles.timerPill}>
+            <MaterialIcons
+              name="timer"
+              size={14}
+              color={sessionTimeRemaining < 60 ? Colors.light.critical : Colors.light.primary}
+            />
+            <Text
+              style={[
+                styles.timerText,
+                sessionTimeRemaining < 60 && { color: Colors.light.critical },
+              ]}>
+              {formatTimer(sessionTimeRemaining)}
+            </Text>
           </View>
 
           <View style={styles.headerControls}>
-            <View style={styles.speedPill}>
-              <Text style={styles.speedText}>{params.speechSpeed || preferences?.speechSpeed || '1.0x'}</Text>
-            </View>
             <TouchableOpacity
               onPress={() => {
                 setIsSpeakerEnabled(!isSpeakerEnabled);
@@ -433,8 +553,16 @@ export default function VoicePracticeRoomScreen() {
           </View>
         </View>
 
-        {/* Question Canvas */}
-        <View style={styles.content}>
+        {/* Question & Voice Controls Canvas (Scrollable so large questions don't push mic controls off screen) */}
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: 40 + Math.max(insets.bottom, 20) },
+          ]}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+          keyboardShouldPersistTaps="handled">
           {/* Topic Context Pill */}
           <View style={styles.topicPill}>
             <View style={styles.topicDot} />
@@ -450,7 +578,14 @@ export default function VoicePracticeRoomScreen() {
               <Text style={styles.promptLabel}>AI INTERVIEWER</Text>
             </View>
 
-            <Text style={styles.promptText}>{currentQuestion}</Text>
+            <Text
+              style={[
+                styles.promptText,
+                (currentQuestion?.length || 0) > 140 && styles.promptTextLong,
+              ]}
+              selectable={true}>
+              {currentQuestion}
+            </Text>
 
             {/* TTS Failure fallback text banner (Milestone 5) */}
             {ttsFailedNotice && (
@@ -602,7 +737,7 @@ export default function VoicePracticeRoomScreen() {
               Speak naturally. Your spoken audio is evaluated transiently for clarity and technical accuracy.
             </Text>
           </View>
-        </View>
+        </ScrollView>
 
         {/* Milestone 5: Interruption Resume Overlay */}
         {isInterrupted && (
@@ -693,6 +828,22 @@ const styles = StyleSheet.create({
     color: Colors.light.onSurface,
     fontWeight: '600',
   },
+  timerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.surfaceContainerLow,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 196, 215, 0.4)',
+    gap: 4,
+  },
+  timerText: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.primary,
+    fontWeight: '700',
+  },
   headerControls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -722,6 +873,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(200, 196, 215, 0.4)',
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.margin,
+    paddingTop: 12,
+    paddingBottom: 40,
+    justifyContent: 'space-between',
+    gap: 16,
   },
   content: {
     flex: 1,
@@ -770,6 +932,10 @@ const styles = StyleSheet.create({
     ...Typography.sizes.headlineMd,
     color: Colors.light.onSurface,
     lineHeight: 28,
+  },
+  promptTextLong: {
+    fontSize: 17,
+    lineHeight: 25,
   },
   ttsNoticeBox: {
     flexDirection: 'row',

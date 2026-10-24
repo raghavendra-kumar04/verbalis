@@ -16,9 +16,10 @@ interface AuthContextType {
   userEmail: string | null;
   firstName: string;
   preferences: UserPreferences;
-  loadProfile: () => Promise<void>;
+  loadProfile: () => Promise<boolean>;
   updateProfile: (data: Partial<UserPreferences & { firstName: string }>) => Promise<{ success: boolean; message?: string }>;
-  login: (email: string, password?: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  signup: (email: string, password: string, firstName?: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -33,11 +34,12 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   isLoading: true,
   userEmail: null,
-  firstName: 'Raghavendra',
+  firstName: '',
   preferences: defaultPreferences,
-  loadProfile: async () => {},
+  loadProfile: async () => false,
   updateProfile: async () => ({ success: false }),
   login: async () => ({ success: false }),
+  signup: async () => ({ success: false }),
   logout: async () => {},
 });
 
@@ -45,10 +47,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [firstName, setFirstName] = useState<string>('Raghavendra');
+  const [firstName, setFirstName] = useState<string>('');
   const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
 
-  const loadProfile = async () => {
+  const loadProfile = async (): Promise<boolean> => {
     try {
       const response = await api.get('/profile');
       if (response.data) {
@@ -64,9 +66,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           speechSpeed: response.data.speechSpeed || '1.0x',
           reducedMotion: Boolean(response.data.reducedMotion),
         });
+        return true;
       }
-    } catch (err) {
+      return false;
+    } catch (err: any) {
       console.warn('Could not fetch profile from database:', err);
+      if (err.response?.status === 401) {
+        setIsAuthenticated(false);
+        setUserEmail(null);
+        setFirstName('');
+        try {
+          await AppStorage.deleteItem('verbalis_jwt');
+          await AppStorage.deleteItem('verbalis_user_email');
+        } catch {}
+      }
+      return false;
     }
   };
 
@@ -96,62 +110,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const savedEmail = await AppStorage.getItem('verbalis_user_email');
-        if (savedEmail) {
-          setUserEmail(savedEmail);
-        }
         const token = await AppStorage.getItem('verbalis_jwt');
-        if (token) {
-          setIsAuthenticated(true);
-          await loadProfile();
+        const savedEmail = await AppStorage.getItem('verbalis_user_email');
+        if (token && savedEmail) {
+          const success = await loadProfile();
+          if (success) {
+            setUserEmail(savedEmail);
+            setIsAuthenticated(true);
+          } else {
+            setIsAuthenticated(false);
+            await AppStorage.deleteItem('verbalis_jwt');
+            await AppStorage.deleteItem('verbalis_user_email');
+          }
+        } else {
+          setIsAuthenticated(false);
         }
       } catch (err) {
         console.warn('Auth init error', err);
+        setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
       }
     };
 
     initAuth();
-
-    // Listen to AppState transitions: when app goes to background, mark logged out locally
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState.match(/inactive|background/)) {
-        setIsAuthenticated(false);
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
   }, []);
 
   const login = async (email: string, password = ''): Promise<{ success: boolean; message?: string }> => {
     try {
       setIsLoading(true);
-      const response = await api.post('/auth/login', { email, password });
-      const { token } = response.data;
+      const cleanEmail = email.trim().toLowerCase();
+      const response = await api.post('/auth/login', { email: cleanEmail, password });
+      const { token, user } = response.data;
 
       if (token) {
         await AppStorage.setItem('verbalis_jwt', token);
-        await AppStorage.setItem('verbalis_user_email', email);
-        setUserEmail(email);
+        await AppStorage.setItem('verbalis_user_email', cleanEmail);
+        setUserEmail(cleanEmail);
+        if (user?.firstName) {
+          setFirstName(user.firstName);
+        }
         setIsAuthenticated(true);
-        // Load the real profile from database immediately
         await loadProfile();
         return { success: true };
       }
-      return { success: false, message: 'Invalid server response' };
+      return { success: false, message: 'Invalid response from server' };
     } catch (error: any) {
-      if (!error.response && __DEV__) {
-        console.log('Dev mode fallback: signing in locally without active backend');
-        await AppStorage.setItem('verbalis_jwt', 'dev_mock_token_12345');
-        await AppStorage.setItem('verbalis_user_email', email);
-        setUserEmail(email);
+      const message = error.response?.data?.message || error.message || 'Failed to connect to backend';
+      return { success: false, message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signup = async (
+    email: string,
+    password = '',
+    userFirstName = ''
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      setIsLoading(true);
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanName = userFirstName.trim() || cleanEmail.split('@')[0];
+
+      const response = await api.post('/auth/signup', {
+        email: cleanEmail,
+        password,
+        firstName: cleanName,
+      });
+
+      const { token, user } = response.data;
+
+      if (token) {
+        await AppStorage.setItem('verbalis_jwt', token);
+        await AppStorage.setItem('verbalis_user_email', cleanEmail);
+        setUserEmail(cleanEmail);
+        setFirstName(cleanName);
         setIsAuthenticated(true);
+        await loadProfile();
         return { success: true };
       }
-      const message = error.response?.data?.message || 'Failed to connect to backend';
+      return { success: false, message: 'Invalid response from server' };
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Registration failed';
       return { success: false, message };
     } finally {
       setIsLoading(false);
@@ -161,7 +202,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       setIsAuthenticated(false);
+      setUserEmail(null);
+      setFirstName('');
       await AppStorage.deleteItem('verbalis_jwt');
+      await AppStorage.deleteItem('verbalis_user_email');
     } catch (e) {
       console.warn('Logout error', e);
     }
@@ -178,6 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadProfile,
         updateProfile,
         login,
+        signup,
         logout,
       }}>
       {children}

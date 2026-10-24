@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme';
 import { Card } from '../../components/ui/Card';
@@ -61,7 +61,7 @@ export default function HomeDashboardScreen() {
   const [recentSession, setRecentSession] = useState<HistoryItem | null>(null);
   const [revisionSuggestions, setRevisionSuggestions] = useState<RevisionTopic[]>([]);
 
-  const displayName = firstName || (userEmail ? userEmail.split('@')[0] : 'Raghavendra');
+  const displayName = firstName || (userEmail ? userEmail.split('@')[0] : 'Engineer');
 
   const fetchData = async () => {
     try {
@@ -92,9 +92,12 @@ export default function HomeDashboardScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Auto-refresh every time the user navigates back to Dashboard
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -199,7 +202,7 @@ export default function HomeDashboardScreen() {
             <Text style={styles.metricLabel}>Avg Clarity</Text>
             <View style={styles.metricValRow}>
               <Text style={styles.metricNumber}>
-                {progress && progress.totalSessions > 0 ? `${progress.averageClarity}%` : '—'}
+                {progress && progress.totalSessions > 0 ? `${progress.averageClarity} / 5` : '—'}
               </Text>
               {progress && progress.totalSessions > 0 && (
                 <Badge label="Real DB" variant="neutral" style={styles.trendBadge} />
@@ -211,8 +214,10 @@ export default function HomeDashboardScreen() {
             <View style={styles.metricValRow}>
               <Text style={styles.metricNumber}>
                 {progress && progress.totalSpokenSeconds > 0
-                  ? `${Math.round(progress.totalSpokenSeconds / 60)}m`
-                  : '0m'}
+                  ? (progress.totalSpokenSeconds >= 60
+                      ? `${Math.floor(progress.totalSpokenSeconds / 60)}m`
+                      : `${progress.totalSpokenSeconds}s`)
+                  : '0s'}
               </Text>
               <Text style={styles.metricSub}>total</Text>
             </View>
@@ -245,13 +250,13 @@ export default function HomeDashboardScreen() {
                     {recentSession.topicName || recentSession.topicId.toUpperCase()}
                   </Text>
                   <Text style={styles.recentMeta}>
-                    {new Date(recentSession.createdAt).toLocaleDateString()} • {recentSession.durationSeconds}s duration
+                    {new Date(recentSession.createdAt).toLocaleDateString()} • {recentSession.durationSeconds >= 60 ? `${Math.floor(recentSession.durationSeconds / 60)}m ${recentSession.durationSeconds % 60}s` : `${recentSession.durationSeconds}s`} duration
                   </Text>
                 </View>
                 <Badge
-                  label={`Clarity: ${recentSession.overallScore?.clarity || 0}%`}
+                  label={`Clarity: ${recentSession.overallScore?.clarity != null ? Number(recentSession.overallScore.clarity).toFixed(1) : '—'} / 5`}
                   variant={
-                    (recentSession.overallScore?.clarity || 0) >= 70 ? 'success' : 'caution'
+                    (recentSession.overallScore?.clarity || 0) >= 3.5 ? 'success' : 'caution'
                   }
                 />
               </View>

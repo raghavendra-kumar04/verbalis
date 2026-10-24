@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,11 +8,30 @@ import { AuthenticatedRequest, authenticateJwt } from '../middleware/auth.js';
 import { Session } from '../models/Session.js';
 import { SessionSummary } from '../models/SessionSummary.js';
 import { SessionContextService } from '../services/sessionContext.js';
-import { GroqService } from '../services/groqService.js';
+import { GroqService, computeNextDifficulty } from '../services/groqService.js';
 import { Topic } from '../models/Topic.js';
 
 const router = Router();
-const upload = multer({ dest: path.join(os.tmpdir(), 'verbalis_uploads') });
+
+const uploadDir = path.join(os.tmpdir(), 'verbalis_uploads');
+if (!fs.existsSync(uploadDir)) {
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch {}
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const originalExt = path.extname(file.originalname || '');
+    const ext = originalExt || (file.mimetype && file.mimetype.includes('webm') ? '.webm' : '.m4a');
+    cb(null, `turn_${Date.now()}_${uuidv4()}${ext}`);
+  },
+});
+
+const upload = multer({ storage });
 
 // All session routes require JWT
 router.use(authenticateJwt);
@@ -23,19 +43,25 @@ router.use(authenticateJwt);
 router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { topicId, customTopicText, feedbackMode = 'per_answer', coachingFocus = 'all_round' } = req.body;
-    const userId = req.user?.userId || 'personal_user_1';
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
     const sessionId = uuidv4();
 
-    // Find initial question
-    let firstQuestion = 'Could you explain the core concepts and trade-offs of this topic?';
-    if (customTopicText) {
-      firstQuestion = `Explain the architectural design and key trade-offs of ${customTopicText}.`;
-    } else {
+    // Dynamically generate a distinct initial question via Groq AI
+    let topicName = customTopicText || 'Computer Science & Software Engineering';
+    let subtopics: string[] = [];
+    if (!customTopicText) {
       const topicDoc = await Topic.findOne({ topicId }).lean();
-      if (topicDoc && topicDoc.sampleQuestions.length > 0) {
-        firstQuestion = topicDoc.sampleQuestions[0];
+      if (topicDoc) {
+        topicName = topicDoc.name;
+        subtopics = topicDoc.subtopics || [];
       }
     }
+
+    const firstQuestion = await GroqService.generateInitialQuestion(topicName, subtopics);
 
     // Save temporary session context file (auto-cleaned on finish)
     SessionContextService.saveContext({
@@ -44,12 +70,15 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       customTopicText,
       feedbackMode,
       coachingFocus,
+      currentDifficulty: 'beginner', // <-- ALWAYS start at beginner
+      startedAt: Date.now(),
       turns: [
         {
           questionAsked: firstQuestion,
           keyPointsMentioned: [],
           weaknessesNoted: [],
           followUpHint: '',
+          difficultyLevel: 'beginner',
         },
       ],
       expiresAt: Date.now() + 4 * 60 * 60 * 1000, // 4 hours TTL
@@ -127,35 +156,55 @@ router.post('/:id/turns', upload.single('audio'), async (req: AuthenticatedReque
     }
 
     let feedback = null;
-    let nextQuestion = 'Could you elaborate on the practical trade-offs of this approach?';
+    let nextQuestion = '';
+
+    const allAskedQuestions = context.turns.map((t) => t.questionAsked);
+    const topicLabel = context.customTopicText || context.topicId;
+
+    // --- Adaptive difficulty: compute next level from prior scores ---
+    const currentDifficulty = context.currentDifficulty || 'beginner';
+    const nextDifficulty = computeNextDifficulty(currentDifficulty, context.turns);
+    console.log(`[Adaptive] Current: ${currentDifficulty} → Next: ${nextDifficulty}`);
 
     if (context.feedbackMode === 'per_answer') {
       feedback = await GroqService.evaluateAnswer(
-        context.customTopicText || context.topicId,
+        topicLabel,
         questionAsked,
         transcript,
         context.coachingFocus,
         currentTurn ? currentTurn.weaknessesNoted : []
       );
-      if (feedback.followUpQuestion) {
-        nextQuestion = feedback.followUpQuestion;
+      if (feedback.followUpQuestion && feedback.followUpQuestion.trim().length > 15) {
+        // Use AI-generated follow-up but still pass difficulty so it's calibrated
+        nextQuestion = feedback.followUpQuestion.trim();
+      } else {
+        nextQuestion = await GroqService.generateFollowUpQuestion(topicLabel, questionAsked, allAskedQuestions, nextDifficulty);
       }
     } else {
-      // In end-of-session mode, generate follow-up question via 8B without mid-session evaluation
-      nextQuestion = await GroqService.generateFollowUpQuestion(
-        context.customTopicText || context.topicId,
-        questionAsked,
-        ['covered concepts']
-      );
+      nextQuestion = await GroqService.generateFollowUpQuestion(topicLabel, questionAsked, allAskedQuestions, nextDifficulty);
     }
 
-    // Update ephemeral context (Notice: NO raw transcripts stored)
+    // Update ephemeral context with score for future difficulty computation
+    context.currentDifficulty = nextDifficulty;
     context.turns.push({
       questionAsked: nextQuestion,
-      keyPointsMentioned: ['explained chaining', 'addressed average lookup'],
+      keyPointsMentioned: feedback?.keyPointsMentioned || [],
       weaknessesNoted: feedback?.improvements || [],
       followUpHint: '',
+      difficultyLevel: nextDifficulty,
+      technicalScore: feedback?.technicalAccuracyScore,
     });
+    // Store full turn evaluation details on the CURRENT (just-answered) turn
+    if (currentTurn) {
+      currentTurn.userTranscript = transcript;
+      currentTurn.technicalScore = feedback?.technicalAccuracyScore;
+      currentTurn.grammarScore = feedback?.grammarScore;
+      currentTurn.clarityScore = feedback?.clarityScore;
+      currentTurn.interviewReadinessScore = feedback?.interviewReadinessScore;
+      currentTurn.strengths = feedback?.strengths || [];
+      currentTurn.weaknessesNoted = feedback?.improvements || [];
+      currentTurn.fillerWords = feedback?.fillerWordsDetected || [];
+    }
     SessionContextService.saveContext(context);
 
     res.json({
@@ -163,52 +212,88 @@ router.post('/:id/turns', upload.single('audio'), async (req: AuthenticatedReque
       feedback,
       nextQuestion,
       turnCount: context.turns.length - 1,
+      currentDifficulty: nextDifficulty,
     });
   } catch (error: any) {
+    console.error('Turn evaluation error on backend:', error);
     res.status(500).json({ message: error.message || 'Evaluation error' });
   }
 });
 
 /**
+ * GET /api/sessions/:id/summary
+ * Retrieve saved evaluation report for a session
+ */
+router.get('/:id/summary', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const sessionId = String(req.params.id);
+  try {
+    const summary = await SessionSummary.findOne({ sessionId }).lean();
+    if (summary) {
+      res.json(summary);
+      return;
+    }
+    res.status(404).json({ message: 'Summary not found' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Failed to fetch summary' });
+  }
+});
+
+/**
  * POST /api/sessions/:id/finish
- * Finalize session, save summary to MongoDB, delete ephemeral context
+ * Finalize session, generate real dynamic evaluation report from actual spoken answers, save to MongoDB
  */
 router.post('/:id/finish', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const sessionId = String(req.params.id);
-  const userId = req.user?.userId || 'personal_user_1';
+  const userId = req.user?.userId;
+  if (!userId) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
 
   const context = SessionContextService.getContext(sessionId);
+  let durationSeconds = Number(req.body?.durationSeconds || 0);
+  if (durationSeconds <= 0 && context?.startedAt) {
+    durationSeconds = Math.max(10, Math.round((Date.now() - context.startedAt) / 1000));
+  } else if (durationSeconds <= 0) {
+    durationSeconds = 60;
+  }
 
-  // Clean up temporary file
+  const topicLabel = context?.customTopicText || context?.topicId || 'Technical Interview';
+  const turns = context?.turns || [];
+
+  // Generate dynamic, personalized summary based strictly on what user spoke
+  const summary = await GroqService.generateSessionSummary(topicLabel, turns, durationSeconds);
+
+  // Clean up temporary file context
   SessionContextService.deleteContext(sessionId);
-
-  const summary = {
-    overallScore: {
-      grammar: 4.2,
-      clarity: 4.0,
-      technicalAccuracy: 4.8,
-      interviewReadiness: 4.5,
-    },
-    strengths: [
-      'Maintained consistent use of correct technical terms.',
-      'Answered follow-up adaptive questions directly without drift.',
-    ],
-    recurringWeaknesses: [
-      'Replace hesitation pauses with deliberate 1-second silence.',
-    ],
-    recommendedExercises: [
-      'Practice explaining quicksort pivot selection.',
-    ],
-    turnCount: context ? context.turns.length : 3,
-  };
 
   try {
     await SessionSummary.create({
       sessionId,
       userId,
       topicId: context ? context.topicId : 'dsa',
-      ...summary,
+      overallScore: summary.overallScore,
+      headline: summary.headline,
+      executiveSummary: summary.executiveSummary,
+      readinessBadge: summary.readinessBadge,
+      strengths: summary.strengths,
+      recurringWeaknesses: summary.recurringWeaknesses,
+      recommendedExercises: summary.recommendedExercises,
+      turnCount: summary.turnCount,
+      durationSeconds,
     });
+  } catch (err: any) {
+    console.error('SessionSummary create error:', err.message);
+  }
+
+  // Also mark Session record as finished
+  try {
+    const { Session } = await import('../models/Session.js');
+    await Session.findOneAndUpdate(
+      { userId, status: 'active' },
+      { status: 'finished', finishedAt: new Date(), turnCount: summary.turnCount },
+      { sort: { startedAt: -1 } }
+    );
   } catch {}
 
   res.json({
@@ -216,5 +301,6 @@ router.post('/:id/finish', async (req: AuthenticatedRequest, res: Response): Pro
     summary,
   });
 });
+
 
 export const sessionRoutes = router;

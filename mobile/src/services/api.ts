@@ -30,7 +30,7 @@ export const API_BASE_URL = getBackendUrl();
 
 export const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
-  timeout: 30000,
+  timeout: 60000,
 });
 
 api.interceptors.request.use(async (config) => {

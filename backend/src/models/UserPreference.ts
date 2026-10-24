@@ -19,9 +19,9 @@ export interface IUserPreference extends Document {
 }
 
 const UserPreferenceSchema: Schema = new Schema({
-  userId: { type: String, required: true, unique: true },
-  email: { type: String, default: 'raghavendra@gmail.com' },
-  firstName: { type: String, default: 'Raghavendra' },
+  userId: { type: String, required: true, unique: true, index: true },
+  email: { type: String, required: true },
+  firstName: { type: String, required: true },
   preferredFeedbackMode: { type: String, enum: ['per_answer', 'end_of_session'], default: 'per_answer' },
   coachingFocus: { 
     type: String, 

@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,31 +19,62 @@ import { Button } from '../../components/ui/Button';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading } = useAuth();
+  const { login, signup, isLoading } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [email, setEmail] = useState('raghavendra@gmail.com');
-  const [password, setPassword] = useState('password123');
+  const [firstName, setFirstName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleAuth = async () => {
-    if (!email.trim()) {
+    setErrorMessage(null);
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
       setErrorMessage('Please enter your email address');
       return;
     }
-    setErrorMessage(null);
 
-    const res = await login(email.trim(), password);
-    if (res.success) {
-      router.replace('/(tabs)');
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setErrorMessage('Please enter a valid email address');
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage('Please enter your password');
+      return;
+    }
+
+    if (mode === 'signup') {
+      if (!firstName.trim()) {
+        setErrorMessage('Please enter your first name');
+        return;
+      }
+      if (password.length < 6) {
+        setErrorMessage('Password must be at least 6 characters');
+        return;
+      }
+
+      const res = await signup(cleanEmail, password, firstName.trim());
+      if (res.success) {
+        router.replace('/(tabs)');
+      } else {
+        setErrorMessage(res.message || 'Registration failed. Please try again.');
+      }
     } else {
-      setErrorMessage(res.message || 'Authentication failed. Please try again.');
+      const res = await login(cleanEmail, password);
+      if (res.success) {
+        router.replace('/(tabs)');
+      } else {
+        setErrorMessage(res.message || 'Authentication failed. Please check your credentials.');
+      }
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardContainer}>
@@ -51,16 +82,20 @@ export default function LoginScreen() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.brandRow}>
-              <MaterialIcons name="graphic-eq" size={24} color={Colors.light.primaryContainer} />
+              <MaterialIcons name="graphic-eq" size={26} color={Colors.light.primaryContainer} />
               <Text style={styles.brandName}>Verbalis</Text>
             </View>
           </View>
 
           {/* Hero text */}
           <View style={styles.heroSection}>
-            <Text style={styles.heroTitle}>Welcome to your coach</Text>
+            <Text style={styles.heroTitle}>
+              {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+            </Text>
             <Text style={styles.heroSubtitle}>
-              Sign in to track your speech clarity, technical practice sessions, and interview growth.
+              {mode === 'signin'
+                ? 'Sign in to access your speech evaluations, practice topics, and progress history.'
+                : 'Sign up to start technical voice interview rehearsal with real-time AI feedback.'}
             </Text>
           </View>
 
@@ -68,16 +103,26 @@ export default function LoginScreen() {
           <View style={styles.segmentedContainer}>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => setMode('signin')}
-              style={[styles.segmentBtn, mode === 'signin' && styles.segmentBtnActive]}>
+              onPress={() => {
+                setMode('signin');
+                setErrorMessage(null);
+              }}
+              style={[styles.segmentBtn, mode === 'signin' && styles.segmentBtnActive]}
+              accessibilityRole="button"
+              accessibilityLabel="Switch to Sign In">
               <Text style={[styles.segmentText, mode === 'signin' && styles.segmentTextActive]}>
                 Sign In
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => setMode('signup')}
-              style={[styles.segmentBtn, mode === 'signup' && styles.segmentBtnActive]}>
+              onPress={() => {
+                setMode('signup');
+                setErrorMessage(null);
+              }}
+              style={[styles.segmentBtn, mode === 'signup' && styles.segmentBtnActive]}
+              accessibilityRole="button"
+              accessibilityLabel="Switch to Create Account">
               <Text style={[styles.segmentText, mode === 'signup' && styles.segmentTextActive]}>
                 Create Account
               </Text>
@@ -94,6 +139,23 @@ export default function LoginScreen() {
 
           {/* Form */}
           <View style={styles.form}>
+            {/* First Name Field (Only in Sign Up mode) */}
+            {mode === 'signup' && (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>First name</Text>
+                <View style={styles.inputWrapper}>
+                  <MaterialIcons name="person-outline" size={20} color={Colors.light.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    autoCapitalize="words"
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    accessibilityLabel="First Name"
+                  />
+                </View>
+              </View>
+            )}
+
             {/* Email Field */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Email address</Text>
@@ -101,14 +163,14 @@ export default function LoginScreen() {
                 <MaterialIcons name="mail-outline" size={20} color={Colors.light.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="your.email@gmail.com"
-                  placeholderTextColor={Colors.light.outline}
                   autoCapitalize="none"
+                  autoCorrect={false}
                   keyboardType="email-address"
                   value={email}
                   onChangeText={setEmail}
+                  accessibilityLabel="Email Address"
                 />
-                {email.includes('@') && (
+                {email.includes('@') && email.includes('.') && (
                   <View style={styles.validCheck}>
                     <MaterialIcons name="check" size={14} color={Colors.light.successText} />
                   </View>
@@ -120,21 +182,24 @@ export default function LoginScreen() {
             <View style={styles.fieldGroup}>
               <View style={styles.passwordLabelRow}>
                 <Text style={styles.fieldLabel}>Password</Text>
-                <TouchableOpacity onPress={() => Alert.alert('Recovery', 'In personal MVP mode, your password is set in backend .env.')}>
-                  <Text style={styles.forgotLink}>Forgot password?</Text>
-                </TouchableOpacity>
+                {mode === 'signup' && (
+                  <Text style={styles.passwordHint}>Min. 6 characters</Text>
+                )}
               </View>
               <View style={styles.inputWrapper}>
                 <MaterialIcons name="lock-outline" size={20} color={Colors.light.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your password"
-                  placeholderTextColor={Colors.light.outline}
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
+                  accessibilityLabel="Password"
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
                   <MaterialIcons
                     name={showPassword ? 'visibility' : 'visibility-off'}
                     size={20}
@@ -146,7 +211,7 @@ export default function LoginScreen() {
 
             {/* Primary Action Button */}
             <Button
-              title={mode === 'signin' ? 'Sign In with Email' : 'Create Coach Account'}
+              title={mode === 'signin' ? 'Sign In' : 'Create Account'}
               onPress={handleAuth}
               loading={isLoading}
               size="lg"
@@ -155,28 +220,22 @@ export default function LoginScreen() {
               style={styles.submitBtn}
             />
 
-            {/* Quick Guest / Developer Bypass Button */}
-            <Button
-              title="Quick Start (Developer Guest Mode)"
-              onPress={() => router.replace('/(tabs)')}
-              variant="secondary"
-              size="md"
-              icon={<MaterialIcons name="bolt" size={18} color={Colors.light.primary} />}
-              style={styles.guestBtn}
-            />
-          </View>
-
-          {/* Privacy & Security Note */}
-          <View style={styles.footer}>
-            <View style={styles.securityPill}>
-              <MaterialIcons name="shield" size={14} color={Colors.light.primary} />
-              <Text style={styles.securityText}>
-                Secured JWT • Spoken audio evaluated transiently
+            {/* Switch Mode Helper Text */}
+            <TouchableOpacity
+              onPress={() => {
+                setMode(mode === 'signin' ? 'signup' : 'signin');
+                setErrorMessage(null);
+              }}
+              style={styles.toggleFooter}>
+              <Text style={styles.toggleFooterText}>
+                {mode === 'signin'
+                  ? "Don't have an account yet? "
+                  : 'Already registered? '}
+                <Text style={styles.toggleFooterLink}>
+                  {mode === 'signin' ? 'Create an account' : 'Sign in'}
+                </Text>
               </Text>
-            </View>
-            <Text style={styles.disclaimerText}>
-              By signing in, you agree to our Terms of Service and transient audio processing policy.
-            </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -194,15 +253,14 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Spacing.margin,
-    paddingVertical: Spacing.md,
-    flexGrow: 1,
-    justifyContent: 'space-between',
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
+    gap: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 48,
   },
   brandRow: {
     flexDirection: 'row',
@@ -210,36 +268,34 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   brandName: {
-    ...Typography.sizes.headlineMd,
+    ...Typography.sizes.headlineSm,
     color: Colors.light.onSurface,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   heroSection: {
-    marginTop: 20,
-    marginBottom: 24,
+    gap: 6,
   },
   heroTitle: {
     ...Typography.sizes.headlineLg,
     color: Colors.light.onSurface,
-    letterSpacing: -0.4,
   },
   heroSubtitle: {
-    ...Typography.sizes.bodyMd,
+    ...Typography.sizes.bodySm,
     color: Colors.light.textSecondary,
-    marginTop: 8,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   segmentedContainer: {
     flexDirection: 'row',
     backgroundColor: Colors.light.surfaceContainerLow,
-    padding: 4,
     borderRadius: BorderRadius.md,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(200, 196, 215, 0.3)',
+    padding: 4,
+    gap: 4,
   },
   segmentBtn: {
     flex: 1,
-    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
     borderRadius: BorderRadius.sm,
   },
@@ -247,16 +303,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.surfaceContainerLowest,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
   segmentText: {
     ...Typography.sizes.labelMd,
     color: Colors.light.textTertiary,
   },
   segmentTextActive: {
-    color: Colors.light.onSurface,
+    color: Colors.light.primary,
     fontWeight: '600',
   },
   errorBanner: {
@@ -265,14 +321,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.criticalTint,
     padding: 12,
     borderRadius: BorderRadius.md,
-    marginBottom: 16,
-    gap: 8,
     borderWidth: 1,
     borderColor: Colors.light.criticalBorder,
+    gap: 8,
   },
   errorText: {
     ...Typography.sizes.bodySm,
-    color: Colors.light.criticalText,
+    color: Colors.light.critical,
     flex: 1,
   },
   form: {
@@ -284,15 +339,16 @@ const styles = StyleSheet.create({
   fieldLabel: {
     ...Typography.sizes.labelMd,
     color: Colors.light.onSurface,
+    fontWeight: '600',
   },
   passwordLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  forgotLink: {
+  passwordHint: {
     ...Typography.sizes.labelSm,
-    color: Colors.light.primary,
+    color: Colors.light.textTertiary,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -301,61 +357,48 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: 'rgba(200, 196, 215, 0.5)',
-    height: 52,
+    height: 48,
     paddingHorizontal: 12,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 8,
   },
   input: {
     flex: 1,
-    height: 50,
     ...Typography.sizes.bodyMd,
     color: Colors.light.onSurface,
-  },
-  validCheck: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.light.successTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
+    height: '100%',
   },
   eyeBtn: {
     padding: 6,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  validCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.successTint,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   submitBtn: {
     marginTop: 8,
   },
-  guestBtn: {
-    marginTop: 4,
-  },
-  footer: {
-    marginTop: 28,
+  toggleFooter: {
     alignItems: 'center',
-    gap: 10,
+    paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  securityPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.surfaceContainerLow,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.pill,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(200, 196, 215, 0.3)',
-  },
-  securityText: {
-    ...Typography.sizes.labelSm,
+  toggleFooterText: {
+    ...Typography.sizes.bodySm,
     color: Colors.light.textSecondary,
   },
-  disclaimerText: {
-    ...Typography.sizes.bodySm,
-    color: Colors.light.textTertiary,
-    textAlign: 'center',
-    paddingHorizontal: 16,
-    lineHeight: 18,
+  toggleFooterLink: {
+    color: Colors.light.primary,
+    fontWeight: '600',
   },
 });

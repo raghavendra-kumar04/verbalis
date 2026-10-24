@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Typography } from '../../constants/theme';
 import { Card } from '../../components/ui/Card';
@@ -27,10 +27,31 @@ interface SessionSummaryItem {
     technicalAccuracy: number;
     grammar: number;
     interviewReadiness: number;
+    average?: number;
   };
   keyStrengths: string[];
   recurringWeaknesses: string[];
+  headline?: string;
   createdAt: string;
+}
+
+interface DailyActivity {
+  day: string;
+  date: string;
+  spokenMinutes: number;
+  spokenSeconds: number;
+  sessionCount: number;
+  averageScore: number;
+}
+
+interface WeeklyReport {
+  thisWeekSessions: number;
+  thisWeekSpokenSeconds: number;
+  thisWeekAverageScore: number;
+  weeklyGoalMinutes: number;
+  weeklyGoalPercent: number;
+  streakDays: number;
+  dailyActivity: DailyActivity[];
 }
 
 interface ProgressData {
@@ -42,6 +63,7 @@ interface ProgressData {
   totalSpokenSeconds: number;
   topRecurringWeaknesses: Array<{ weakness: string; frequency: number }>;
   completedTopicIds: string[];
+  weeklyReport?: WeeklyReport;
 }
 
 export default function HistoryProgressScreen() {
@@ -77,14 +99,28 @@ export default function HistoryProgressScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchHistoryAndProgress();
-  }, []);
+  // Re-fetch whenever screen comes into focus so recent sessions immediately appear
+  useFocusEffect(
+    useCallback(() => {
+      fetchHistoryAndProgress();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchHistoryAndProgress();
   };
+
+  const formatDuration = (totalSeconds: number) => {
+    if (!totalSeconds || totalSeconds <= 0) return '0s';
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    if (mins === 0) return `${secs}s`;
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  };
+
+  const weekly = progress?.weeklyReport;
+  const todayStr = new Date().toISOString().split('T')[0];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -130,7 +166,7 @@ export default function HistoryProgressScreen() {
             />
             <Text
               style={[styles.tabText, activeTab === 'progress' && styles.tabTextActive]}>
-              Weakness Trends
+              Weekly & Trends
             </Text>
           </TouchableOpacity>
         </View>
@@ -141,7 +177,7 @@ export default function HistoryProgressScreen() {
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCol}>
               <Text style={styles.summaryNum}>
-                {progress && progress.totalSessions > 0 ? `${progress.averageClarity}%` : '—'}
+                {progress && progress.totalSessions > 0 ? `${progress.averageClarity} / 5` : '—'}
               </Text>
               <Text style={styles.summaryLabel}>Avg Clarity</Text>
             </View>
@@ -154,8 +190,8 @@ export default function HistoryProgressScreen() {
             <View style={styles.summaryCol}>
               <Text style={styles.summaryNum}>
                 {progress && progress.totalSpokenSeconds > 0
-                  ? `${Math.round(progress.totalSpokenSeconds / 60)}m`
-                  : '0m'}
+                  ? formatDuration(progress.totalSpokenSeconds)
+                  : '0s'}
               </Text>
               <Text style={styles.summaryLabel}>Spoken Audio</Text>
             </View>
@@ -194,7 +230,7 @@ export default function HistoryProgressScreen() {
                     <View style={styles.sessionHeaderRow}>
                       <Badge label={session.topicId.toUpperCase()} variant="neutral" />
                       <Text style={styles.sessionDate}>
-                        {new Date(session.createdAt).toLocaleDateString()} • {session.durationSeconds}s
+                        {new Date(session.createdAt).toLocaleDateString()} • {formatDuration(session.durationSeconds)}
                       </Text>
                     </View>
 
@@ -202,27 +238,40 @@ export default function HistoryProgressScreen() {
                       {session.topicName || session.topicId.toUpperCase()}
                     </Text>
 
-                    {/* Score Pills Row */}
-                    <View style={styles.scoresRow}>
+                    {session.headline && (
+                      <Text style={styles.sessionHeadline}>{session.headline}</Text>
+                    )}
+
+                    {/* Horizontally scrollable Score Pills Row */}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.scoresScrollContent}>
                       <View style={styles.scorePill}>
                         <Text style={styles.scorePillLabel}>Clarity</Text>
                         <Text style={styles.scorePillVal}>
-                          {session.overallScore?.clarity || 0}%
+                          {session.overallScore?.clarity != null ? Number(session.overallScore.clarity).toFixed(1) : '—'} / 5
                         </Text>
                       </View>
                       <View style={styles.scorePill}>
                         <Text style={styles.scorePillLabel}>Technical</Text>
                         <Text style={styles.scorePillVal}>
-                          {session.overallScore?.technicalAccuracy || 0}%
+                          {session.overallScore?.technicalAccuracy != null ? Number(session.overallScore.technicalAccuracy).toFixed(1) : '—'} / 5
                         </Text>
                       </View>
                       <View style={styles.scorePill}>
                         <Text style={styles.scorePillLabel}>Readiness</Text>
                         <Text style={styles.scorePillVal}>
-                          {session.overallScore?.interviewReadiness || 0}%
+                          {session.overallScore?.interviewReadiness != null ? Number(session.overallScore.interviewReadiness).toFixed(1) : '—'} / 5
                         </Text>
                       </View>
-                    </View>
+                      <View style={styles.scorePill}>
+                        <Text style={styles.scorePillLabel}>Grammar</Text>
+                        <Text style={styles.scorePillVal}>
+                          {session.overallScore?.grammar != null ? Number(session.overallScore.grammar).toFixed(1) : '—'} / 5
+                        </Text>
+                      </View>
+                    </ScrollView>
 
                     {/* Key takeaway */}
                     {session.recurringWeaknesses && session.recurringWeaknesses.length > 0 && (
@@ -255,8 +304,100 @@ export default function HistoryProgressScreen() {
             )}
           </View>
         ) : (
-          /* Progress & Weakness Trends */
+          /* Progress, Weekly Report & Weakness Trends */
           <View style={styles.section}>
+            {/* Dynamic Weekly Performance Report Card */}
+            <Card style={styles.weeklyCard}>
+              <View style={styles.weeklyHeader}>
+                <View>
+                  <Text style={styles.weeklyTitle}>Weekly Performance Report</Text>
+                  <Text style={styles.weeklySub}>Past 7 days activity & consistency</Text>
+                </View>
+                <Badge
+                  label={weekly?.streakDays && weekly.streakDays > 0 ? `🔥 ${weekly.streakDays}d Streak` : 'Start Streak'}
+                  variant={weekly?.streakDays && weekly.streakDays > 0 ? 'success' : 'neutral'}
+                />
+              </View>
+
+              {/* Weekly Highlights Row */}
+              <View style={styles.weeklyMetricsRow}>
+                <View style={styles.weeklyMetricCol}>
+                  <Text style={styles.weeklyMetricVal}>
+                    {weekly ? formatDuration(weekly.thisWeekSpokenSeconds) : '0s'}
+                  </Text>
+                  <Text style={styles.weeklyMetricLabel}>Spoken This Week</Text>
+                </View>
+                <View style={styles.weeklyMetricDivider} />
+                <View style={styles.weeklyMetricCol}>
+                  <Text style={styles.weeklyMetricVal}>
+                    {weekly?.thisWeekSessions || 0}
+                  </Text>
+                  <Text style={styles.weeklyMetricLabel}>Sessions</Text>
+                </View>
+                <View style={styles.weeklyMetricDivider} />
+                <View style={styles.weeklyMetricCol}>
+                  <Text style={styles.weeklyMetricVal}>
+                    {weekly && weekly.thisWeekAverageScore > 0 ? `${weekly.thisWeekAverageScore} / 5` : '—'}
+                  </Text>
+                  <Text style={styles.weeklyMetricLabel}>Avg Rating</Text>
+                </View>
+              </View>
+
+              {/* Weekly Goal Progress Bar */}
+              <View style={styles.goalContainer}>
+                <View style={styles.goalTextRow}>
+                  <Text style={styles.goalLabel}>
+                    Weekly Goal: {weekly?.weeklyGoalMinutes || 30} mins
+                  </Text>
+                  <Text style={styles.goalPercent}>
+                    {weekly?.weeklyGoalPercent || 0}% Complete
+                  </Text>
+                </View>
+                <View style={styles.progressBarTrack}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      { width: `${Math.min(100, Math.max(0, weekly?.weeklyGoalPercent || 0))}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* 7-Day Activity Chart */}
+              <View style={styles.chartContainer}>
+                <Text style={styles.chartTitle}>7-Day Rehearsal Activity</Text>
+                <View style={styles.chartDaysRow}>
+                  {weekly?.dailyActivity?.map((d) => {
+                    const isToday = d.date === todayStr;
+                    const hasActivity = d.spokenSeconds > 0;
+                    return (
+                      <View key={d.date} style={styles.dayCol}>
+                        <View style={styles.barTrack}>
+                          <View
+                            style={[
+                              styles.barFill,
+                              {
+                                height: hasActivity
+                                  ? `${Math.min(100, Math.max(25, d.spokenMinutes * 20))}%`
+                                  : '0%',
+                                backgroundColor: isToday ? Colors.light.primary : '#8F90A6',
+                              },
+                            ]}
+                          />
+                        </View>
+                        <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
+                          {d.day}
+                        </Text>
+                        <Text style={styles.dayMinutes}>
+                          {hasActivity ? `${d.spokenMinutes}m` : '—'}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </Card>
+
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recurring Weaknesses</Text>
               <Text style={styles.sectionSub}>Aggregated across all past sessions in MongoDB</Text>
@@ -421,6 +562,130 @@ const styles = StyleSheet.create({
     height: 36,
     backgroundColor: 'rgba(91, 80, 229, 0.2)',
   },
+  weeklyCard: {
+    padding: 16,
+    gap: 16,
+    backgroundColor: Colors.light.surfaceContainerLowest,
+    borderColor: 'rgba(91, 80, 229, 0.2)',
+  },
+  weeklyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  weeklyTitle: {
+    ...Typography.sizes.headlineSm,
+    color: Colors.light.onSurface,
+  },
+  weeklySub: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
+    marginTop: 2,
+  },
+  weeklyMetricsRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.light.surfaceContainerLow,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  weeklyMetricCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  weeklyMetricVal: {
+    ...Typography.sizes.headlineSm,
+    color: Colors.light.primary,
+  },
+  weeklyMetricLabel: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  weeklyMetricDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(200, 196, 215, 0.3)',
+  },
+  goalContainer: {
+    gap: 6,
+  },
+  goalTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  goalLabel: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textSecondary,
+    fontWeight: '500',
+  },
+  goalPercent: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.primary,
+    fontWeight: '700',
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: Colors.light.surfaceContainerLow,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.light.primary,
+    borderRadius: 4,
+  },
+  chartContainer: {
+    gap: 10,
+  },
+  chartTitle: {
+    ...Typography.sizes.labelMd,
+    color: Colors.light.onSurface,
+    fontWeight: '600',
+  },
+  chartDaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 90,
+    paddingTop: 8,
+  },
+  dayCol: {
+    alignItems: 'center',
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  barTrack: {
+    width: 12,
+    flex: 1,
+    backgroundColor: Colors.light.surfaceContainerLow,
+    borderRadius: 6,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  barFill: {
+    width: '100%',
+    borderRadius: 6,
+  },
+  dayLabel: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
+    fontSize: 10,
+  },
+  dayLabelToday: {
+    color: Colors.light.primary,
+    fontWeight: '700',
+  },
+  dayMinutes: {
+    ...Typography.sizes.labelSm,
+    color: Colors.light.textTertiary,
+    fontSize: 9,
+  },
   loadingBox: {
     padding: 32,
     alignItems: 'center',
@@ -540,9 +805,19 @@ const styles = StyleSheet.create({
     ...Typography.sizes.headlineSm,
     color: Colors.light.onSurface,
   },
+  sessionHeadline: {
+    ...Typography.sizes.bodySm,
+    color: Colors.light.textSecondary,
+    fontStyle: 'italic',
+  },
   scoresRow: {
     flexDirection: 'row',
     gap: 8,
+  },
+  scoresScrollContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
   },
   scorePill: {
     flexDirection: 'row',

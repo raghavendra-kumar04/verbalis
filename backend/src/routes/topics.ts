@@ -114,7 +114,11 @@ router.get('/', async (_req: AuthenticatedRequest, res: Response) => {
 });
 
 router.get('/revision', authenticateJwt, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const userId = req.user?.userId || 'personal_user_1';
+  const userId = req.user?.userId;
+  if (!userId) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
 
   try {
     const { SessionSummary } = await import('../models/SessionSummary.js');

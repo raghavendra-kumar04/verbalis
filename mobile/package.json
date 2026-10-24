@@ -15,8 +15,10 @@
     "expo-glass-effect": "~57.0.4",
     "expo-image": "~57.0.5",
     "expo-linking": "~57.0.13",
+    "expo-print": "~57.0.2",
     "expo-router": "~57.0.28",
     "expo-secure-store": "~57.0.4",
+    "expo-sharing": "~57.0.23",
     "expo-speech": "~57.0.3",
     "expo-splash-screen": "~57.0.10",
     "expo-status-bar": "~57.0.1",
@@ -35,11 +37,11 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
+    "eas-cli": "^25.3.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

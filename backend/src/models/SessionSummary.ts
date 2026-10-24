@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISessionSummary extends Document {
-  sessionId: mongoose.Types.ObjectId;
+  sessionId: string;
   userId: string;
   topicId: string;
   overallScore: {
@@ -9,7 +9,11 @@ export interface ISessionSummary extends Document {
     clarity: number;
     technicalAccuracy: number;
     interviewReadiness: number;
+    average?: number;
   };
+  headline?: string;
+  executiveSummary?: string;
+  readinessBadge?: string;
   strengths: string[];
   recurringWeaknesses: string[];
   recommendedExercises: string[];
@@ -20,15 +24,19 @@ export interface ISessionSummary extends Document {
 }
 
 const SessionSummarySchema: Schema = new Schema({
-  sessionId: { type: Schema.Types.ObjectId, ref: 'Session', required: true, index: true },
+  sessionId: { type: String, required: true, index: true },
   userId: { type: String, required: true, index: true },
   topicId: { type: String, required: true },
   overallScore: {
     grammar: { type: Number, required: true, min: 1, max: 5 },
     clarity: { type: Number, required: true, min: 1, max: 5 },
     technicalAccuracy: { type: Number, required: true, min: 1, max: 5 },
-    interviewReadiness: { type: Number, required: true, min: 1, max: 5 }
+    interviewReadiness: { type: Number, required: true, min: 1, max: 5 },
+    average: { type: Number, min: 1, max: 5 },
   },
+  headline: { type: String },
+  executiveSummary: { type: String },
+  readinessBadge: { type: String },
   strengths: { type: [String], default: [] },
   recurringWeaknesses: { type: [String], default: [] },
   recommendedExercises: { type: [String], default: [] },
@@ -40,3 +48,4 @@ const SessionSummarySchema: Schema = new Schema({
 });
 
 export const SessionSummary = mongoose.model<ISessionSummary>('SessionSummary', SessionSummarySchema);
+

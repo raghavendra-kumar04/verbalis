@@ -1,10 +1,29 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { Platform, View, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
 
 export default function TabLayout() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/(auth)/login');
+    }
+  }, [isLoading, isAuthenticated]);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.light.background }}>
+        <ActivityIndicator size="large" color={Colors.light.primaryContainer} />
+      </View>
+    );
+  }
   return (
     <Tabs
       screenOptions={{
@@ -15,8 +34,8 @@ export default function TabLayout() {
           backgroundColor: Colors.light.surface,
           borderTopColor: 'rgba(200, 196, 215, 0.4)',
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 86 : 68,
-          paddingBottom: Platform.OS === 'ios' ? 26 : 10,
+          height: 58 + Math.max(insets.bottom, 12),
+          paddingBottom: Math.max(insets.bottom, 10),
           paddingTop: 8,
           elevation: 8,
           shadowColor: '#1c1d1f',
