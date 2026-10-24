@@ -7,11 +7,13 @@ import { AppStorage } from '../utils/storage';
  * Resolves the backend API URL.
  * Automatically resolves to the laptop's Wi-Fi / hotspot IP when accessed from a physical phone.
  */
+const CLOUD_BACKEND_URL = 'https://verbalis-backend.onrender.com';
+
 const getBackendUrl = (): string => {
   if (process.env.EXPO_PUBLIC_BACKEND_URL) {
     return process.env.EXPO_PUBLIC_BACKEND_URL;
   }
-  // Try extracting the host IP from Expo hostUri (which points to your laptop running Metro)
+  // Try extracting the host IP from Expo hostUri (when running in Expo Go development mode)
   const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
   if (hostUri) {
     const host = hostUri.split(':')[0];
@@ -19,11 +21,8 @@ const getBackendUrl = (): string => {
       return `http://${host}:3000`;
     }
   }
-  // Laptop Wi-Fi IP address when phone is connected to hotspot/wifi
-  if (Platform.OS === 'android') {
-    return 'http://10.112.151.252:3000';
-  }
-  return 'http://localhost:3000';
+  // Standalone APK / Production fallback (connects securely over HTTPS)
+  return CLOUD_BACKEND_URL;
 };
 
 export const API_BASE_URL = getBackendUrl();
