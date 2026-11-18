@@ -1,56 +1,93 @@
-# Welcome to your Expo app 👋
+# Verbalis Mobile Client
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The React Native (Expo) client application for **Verbalis** — an AI-powered technical voice interview rehearsal platform.
 
-## Get started
+---
 
-1. Install dependencies
+## Overview
 
-   ```bash
-   npm install
-   ```
+The mobile client enables candidates to:
+- Practice answering realistic technical interview prompts via voice.
+- Receive dynamic speech-to-text transcription and instant feedback (Grammar, Clarity, Technical Accuracy, Interview Readiness).
+- Select adaptive difficulty levels and targeted coaching focus areas (e.g., Reducing Filler Words, Answer Structure).
+- View weekly progress, historical session analytics, and export comprehensive evaluation reports.
 
-2. Start the app
+---
 
-   ```bash
-   npx expo start
-   ```
+## Tech Stack
 
-In the output, you'll find options to open the app in a
+- **Framework**: [Expo SDK 57](https://expo.dev) with React Native & React 19
+- **Routing**: [Expo Router](https://docs.expo.dev/router/introduction/) (file-based navigation)
+- **Audio & Speech**: `expo-audio` (high-quality recording), `expo-speech` (TTS for question prompts)
+- **Networking**: Axios with JWT-authenticated sessions
+- **Storage**: `expo-secure-store` (secure mobile token storage) & Web LocalStorage fallback
+- **Exporting**: `expo-print` & `expo-sharing` (PDF evaluation reports)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+---
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Getting Started
 
-## Get a fresh project
-
-When you're ready, run:
+### 1. Install Dependencies
 
 ```bash
-npm run reset-project
+cd mobile
+npm install
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+### 2. Environment Configuration
 
-### Other setup steps
+Create a `.env` file in the `mobile` directory based on the template below:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```env
+# Backend API Base URL
+# For local physical device testing, use your machine's local IP (e.g., http://192.168.1.X:3000)
+# For production or preview APK builds, use your HTTPS production endpoint
+EXPO_PUBLIC_BACKEND_URL=https://your-production-backend.example.com
+```
 
-## Learn more
+> **Security Note**: Never commit actual API keys or personal network configuration files to source control. `.env` is ignored in `.gitignore`.
 
-To learn more about developing your project with Expo, look at the following resources:
+### 3. Run the Development Server
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+# Start Expo bundler
+npx expo start
 
-## Join the community
+# Open directly on Android emulator / connected device
+npx expo start --android
 
-Join our community of developers creating universal apps.
+# Open in Web preview
+npx expo start --web
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## Building the Android APK
+
+The project is preconfigured with EAS Build for creating standalone Android APKs:
+
+```bash
+# 1. Install EAS CLI globally if not already installed
+npm install -g eas-cli
+
+# 2. Login to your Expo account
+eas login
+
+# 3. Build standalone APK
+eas build -p android --profile preview
+```
+
+---
+
+## Permissions & Device Access
+
+- **Microphone (`RECORD_AUDIO`)**: Required to capture your spoken technical explanations during interview rehearsal turns.
+- **Internet (`INTERNET`)**: Required to communicate with the backend API for speech transcription, evaluation, and account synchronization.
+
+Audio recordings are processed transiently and deleted immediately after transcription. No raw audio files are stored permanently.
+
+---
+
+## License
+
+All rights reserved.
